@@ -1,0 +1,147 @@
+\begin{tikzpicture}[
+		block/.style={rectangle, draw, rounded corners=2pt, minimum height=0.6cm,
+			text centered, font=\scriptsize, minimum width=2.2cm, inner sep=2pt},
+		conv/.style={block, fill=blue!15},
+		c3k2/.style={block, fill=orange!20},
+		sppf/.style={block, fill=red!15},
+		psa/.style={block, fill=purple!15},
+		upsample/.style={block, fill=green!15},
+		concat/.style={block, fill=yellow!20, minimum width=1.2cm},
+		detect/.style={block, fill=red!25, minimum width=2.4cm},
+		conn/.style={->, thick, black!70},
+		upsamparrow/.style={->, ultra thick, green!60!black},
+		downarrow/.style={->, ultra thick, blue!60!black},
+		skip/.style={->, thick, blue!50, dashed},
+		downskip/.style={->, thick, orange!50, dashed},
+		detskip/.style={->, thick, red!60, dashed},
+		label/.style={font=\tiny, text=gray},
+		node distance=0.4cm
+	]
+
+	% ===== BACKBONE (left column) =====
+	\node[conv] (b0) {Conv 64, s=2};
+	\node[conv, below=of b0] (b1) {Conv 128, s=2};
+	\node[c3k2, below=of b1] (b2) {C3k2 $\times$2, 256};
+	\node[conv, below=of b2] (b3) {Conv 256, s=2};
+	\node[c3k2, below=of b3] (b4) {C3k2 $\times$2, 512};
+	\node[conv, below=of b4] (b5) {Conv 512, s=2};
+	\node[c3k2, below=of b5] (b6) {C3k2 $\times$2, 512};
+	\node[conv, below=of b6] (b7) {Conv 1024, s=2};
+	\node[c3k2, below=of b7] (b8) {C3k2 $\times$2, 1024};
+	\node[sppf, below=of b8] (b9) {SPPF, 1024};
+	\node[psa, below=of b9] (b10) {C2PSA, 1024};
+
+	% Backbone connections
+	\foreach \a/\b in {b0/b1, b1/b2, b2/b3, b3/b4, b4/b5, b5/b6, b6/b7, b7/b8, b8/b9, b9/b10} {
+		\draw[conn] (\a) -- (\b);
+	}
+
+	% Backbone scale labels
+	\node[label, left=0.3cm of b0] {P1/2};
+	\node[label, left=0.3cm of b1] {P2/4};
+	\node[label, left=0.3cm of b3] {P3/8};
+	\node[label, left=0.3cm of b5] {P4/16};
+	\node[label, left=0.3cm of b7] {P5/32};
+
+	% Backbone section label
+	\node[font=\small\bfseries, above=0.2cm of b0] {Backbone};
+
+	% ===== TOP-DOWN PATH (middle column, goes upward) =====
+	% Align h11 at same height as b10, then go upward
+	\node[concat, right=1.8cm of b6] (h12) {Concat};
+	\node[c3k2, above=of h12] (h13) {C3k2 $\times$2, 512};
+
+	\node[concat, above=of h13] (h15) {Concat};
+	\node[c3k2, above=of h15] (h16) {C3k2 $\times$2, 256};
+
+	% Top-down connections (upward, green arrows for upsample)
+	\draw[upsamparrow] (b10.south) -- ++(0.0,-0.5) -| (h12.south);
+	\draw[conn] (h12) -- (h13);
+	\draw[upsamparrow] (h13) -- (h15);
+	\draw[conn] (h15) -- (h16);
+
+	% Skip connections from backbone to top-down concat nodes
+	\draw[skip] (b6.east) -- (h12.west)
+		node[midway, above, font=\tiny, black] {P4};
+	\draw[skip] (b4.east) -- ++(1.0,0) |- (h15.west)
+		node[pos=0.25, above, font=\tiny, black] {P3};
+
+	% Top-down section label
+	\node[font=\small\bfseries, above=1.2cm of h16] {Top-down};
+
+	% ===== BOTTOM-UP PATH (right column, goes downward) =====
+	\node[concat, right=1.8cm of h13] (h18) {Concat};
+	\node[c3k2, below=of h18] (h19) {C3k2 $\times$2, 512};
+
+	\node[concat, below=of h19] (h21) {Concat};
+	\node[c3k2, below=of h21] (h22) {C3k2, 1024};
+
+	\node[detect, above right=0.6cm and 1.8cm of h18] (h23) {RayCastDetect};
+
+	\node[detect, below=of h23] (h24) {RayRefinement};
+	\node[detect, below=of h24] (h25) {Conv2d};	]
+
+	% Bottom-up connections (downward, blue arrows for downsample)
+	\draw[downarrow] (h16.north) -- ++(0.0, 0.5) -| (h18.north);
+	\draw[conn] (h18) -- (h19);
+	\draw[downarrow] (h19) -- (h21);
+	\draw[conn] (h21) -- (h22);
+	\draw[conn] (h22.south) -- ++(0.0, -0.5) |- ++(1.8, 00) -| ++(0.0, 6.0) -| (h23.north);
+
+	\draw[conn] (h23) -- (h24);
+	\draw[conn] (h24) -- (h25);
+
+	% Intermediary circle nodes for skip connections
+	\node[circle, draw, fill=white, inner sep=1pt, font=\tiny,
+		right=0.6cm of b10] (p5node1) {P5};
+	\node[circle, draw, fill=white, inner sep=1pt, font=\tiny,
+		left=0.6cm of h21] (p5node2) {P5};
+
+	\node[circle, draw, fill=white, inner sep=1pt, font=\tiny,
+		left=0.8cm of h16] (smallnode1) {S};
+	\node[circle, draw, fill=white, inner sep=1pt, font=\tiny,
+		above right=0.4cm and 0.8cm of h23] (smallnode2) {S};
+
+	\node[circle, draw, fill=white, inner sep=1pt, font=\tiny,
+		left=0.8cm of h19] (mednode1) {M};
+	\node[circle, draw, fill=white, inner sep=1pt, font=\tiny,
+		right=1.0cm of h23] (mednode2) {M};
+	\node[circle, draw, fill=white, inner sep=1pt, font=\tiny,
+		left=0.8cm of h22] (largenode1) {L};
+	\node[circle, draw, fill=white, inner sep=1pt, font=\tiny,
+		below right=0.4cm and 0.8cm of h23] (largenode2) {L};
+
+
+	% Skip connections from top-down to bottom-up concat nodes
+	\draw[downskip] (h13.east) -- (h18.west)
+		node[midway, above, font=\tiny, black] {P4};
+	\draw[downskip] (b10.east) -- (p5node1);
+	\draw[downskip] (p5node2.east) |- (h21.west);
+
+	% Detect multi-scale inputs
+	\draw[detskip] (h16) -- (smallnode1);
+	\draw[detskip] (smallnode2) -- (h23.east);
+	\draw[detskip] (h19) -- (mednode1);
+	\draw[detskip] (mednode2) -- (h23.east);
+	\draw[detskip] (h22) -- (largenode1);
+	\draw[detskip] (largenode2) -- (h23.east);
+
+	% Bottom-up section label
+	\node[font=\small\bfseries, above=3.2cm of h18] {Bottom-up};
+
+	% Input/output labels
+	\node[font=\scriptsize, above=0.05cm of b0, text=gray] {Input};
+	\node[font=\scriptsize, below=0.05cm of h25, text=gray] {Output};
+
+	% Head label
+	\node[font=\small\bfseries, above=2.0cm of h23] {Head};
+
+	% Legend
+	\node[draw, rounded corners=2pt, fill=white, inner sep=4pt, font=\scriptsize,
+		right=8.3cm of b0] (legend) {
+		\begin{tabular}{@{}cl@{}}
+			\tikz\draw[upsamparrow](0,0)--(0.5,0); & Upsample \\
+			\tikz\draw[downarrow](0,0)--(0.5,0); & Downsample \\
+		\end{tabular}
+	};
+\end{tikzpicture}

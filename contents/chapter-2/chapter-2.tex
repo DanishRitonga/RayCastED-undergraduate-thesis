@@ -1,36 +1,271 @@
 \chapter{Tinjauan Pustaka dan Dasar Teori}
 
-\section{Tinjauan Pustaka}
+\section{Literature Review}
 
-Berisi tugas akhir-tugas akhir terdahulu yang terkait dengan judul skripsi yang dilakukan. Hal ini meliputi skripsi, tesis, atau publikasi terdahulu yang terkait dengan judul skripsi yang diusulkan. Lakukan pembahasan secara sistemastis dengan menjelaskan masalah apa yang dilakukan oleh tugas akhir terdahulu, kontribusi yang dilakukan, serta analisis penulis terkait dengan keunggulan dan keterbatasan tugas akhir. 
+This section reviews prior work on nuclei detection and segmentation in histopathology images, focusing on methods most relevant to the proposed RayCastED model. The reviewed works are organized chronologically, tracing the evolution from polygon-based segmentation to end-to-end detection frameworks.
 
-Setelah membahas berbagai tugas akhir terdahulu, maka alangkah baiknya penulis melakukan rangkuman terutama terkait dengan peluang pengembangan atau tugas akhir yang akan dilakukan.
+\subsection*{StarDist}
+
+StarDist \cite{schmidt2018cell} introduced the star-convex polygon representation for cell detection, originally developed for fluorescence microscopy. In their extended work \cite{weigert2022stardist}, Weigert and Schmidt adapted StarDist to histopathology images, demonstrating its applicability to the CoNIC challenge where it achieved first place in the segmentation and classification task. StarDist predicts a set of radial distances from each cell centroid to its boundary at fixed angular intervals, producing a star-convex polygon that preserves boundary geometry. However, StarDist relies on a two-stage pipeline: it first generates a dense probability map and then applies non-maximum suppression (NMS) to filter overlapping predictions. This NMS step risks undercounting in densely clumped regions where overlapping predictions are suppressed, and the dense prediction approach introduces computational overhead from post-processing.
+
+\subsection*{CPP-Net}
+
+CPP-Net \cite{chen2023cppnet} addressed a key limitation of earlier polygon-based methods by improving how contextual information is used during polygon prediction. Rather than predicting the centroid-to-boundary distances from a single centroid pixel, CPP-Net samples a point set within each cell and fuses their predictions using a Confidence-based Weighting Module. The authors also introduced a Shape-Aware Perceptual (SAP) loss that constrains predicted polygon shapes. CPP-Net achieved state-of-the-art results on DSB2018, BBBC06, and PanNuke datasets. Despite its improvements in prediction robustness, CPP-Net still operates within a dense prediction framework with NMS-based post-processing, inheriting the same limitations as StarDist regarding clumped cell separation and computational overhead.
+
+\subsection*{LKCell}
+
+LKCell \cite{cui2024lkcell} proposed an efficient approach to nuclei instance segmentation by leveraging large convolution kernels to achieve large receptive fields with reduced computational cost. The method transfers pre-trained large convolution kernel models to the medical domain for the first time and designs a new segmentation decoder based on these kernels. LKCell achieved state-of-the-art performance (0.5080 mPQ) on PanNuke with only 21.6\% of the FLOPs compared to the previous leading method, demonstrating that FCN-based architectures can be both accurate and computationally efficient. However, LKCell follows a traditional dense prediction paradigm and does not address the NMS dependency or the clumped cell separation problem, as it focuses primarily on computational efficiency rather than the detection-accuracy trade-off.
+
+\subsection*{CellPose-SAM}
+
+CellPose-SAM \cite{stringer2025cellposesam} combined the CellPose framework with the Segment Anything Model (SAM) to achieve what the authors describe as superhuman generalization for cellular segmentation. By leveraging SAM's powerful visual features, CellPose-SAM demonstrates strong cross-domain performance without requiring extensive domain-specific training data. While its generalization capability is impressive, CellPose-SAM is a generalist segmentation model rather than a lightweight detection framework, and its computational profile makes it less suitable for real-time edge deployment in resource-constrained clinical settings.
+
+\subsection*{LSP-DETR}
+
+LSP-DETR \cite{pekar2026lsp} represents the most direct precursor to this work. It introduced a fully end-to-end framework for nuclei segmentation that represents nuclei as star-convex polygons within a DETR-style transformer architecture. By using a learned assignment mechanism instead of NMS, LSP-DETR eliminates the undercounting problem in clumped regions. The authors also proposed a novel radial distance loss that allows overlapping nuclei segmentation to emerge naturally. LSP-DETR demonstrated strong generalization across tissues and was over five times faster than the next-fastest leading method. However, its transformer-based backbone imposes quadratic complexity, making it computationally demanding for edge deployment. RayCastED builds directly on LSP-DETR's polygon representation and end-to-end assignment mechanism while replacing the transformer backbone with an FCN to achieve a lightweight computational profile suitable for resource-constrained environments.
+
+\subsection*{Summary and Research Opportunity}
+
+The reviewed methods reveal a clear trade-off landscape: polygon-based methods (StarDist, CPP-Net) preserve boundary geometry but depend on NMS; efficient FCN methods (LKCell) reduce computation but do not address NMS or boundary geometry; generalist models (CellPose-SAM) generalize well but are computationally heavy; and end-to-end transformer methods (LSP-DETR) eliminate NMS but rely on expensive transformer backbones. No existing method combines polygon-based cell representation, NMS-free end-to-end detection, and lightweight FCN-based computation. RayCastED addresses this gap by adapting LSP-DETR's polygon and assignment framework to an FCN backbone, targeting deployment on resource-constrained edge hardware.
 
 
-\section{Dasar Teori}
+\section{Theoretical Basis}
 
-Berisi teori-teori yang menjadi dasar solusi atau produk hasil skripsi. Dasar teori pada umumnya diperoleh melalui buku referensi, publikasi tugas akhir, dan informasi web yang dapat dipertanggungjawabkan. Hindari penggunaan dasar teori melalui tautan wikipedia, surat kabar, atau portal berita.
+\subsection{Histopathological Foundations}
 
-\subsection{Pengenalan Aplikasi Permainan}
+Histopathology is the study of tissue disease through microscopic examination of tissue samples. In clinical practice, tissue specimens are collected through biopsy or surgical resection and processed for microscopic analysis. The tissue undergoes fixation (typically in formalin) to preserve cellular structures, followed by embedding in paraffin wax, sectioning into thin slices, and mounting on glass slides for staining and visualization.
 
-Proses pembuatan \textit{game} dimulai dari pembuatan \textit{game design document} dimana 
-dokumen ini akan menjadi landasan pengembangan game tersebut serta menginformasikan gambaran keseluruhan game yang akan dibuat \cite{ferdiana2012agile}. \textcolor{red}{\textit{Catatan: apapun yang diambil dari tulisan orang lain harus disitasi seperti dicontohkan \cite{ferdiana2012agile}.}}
+The cell nucleus is a membrane-bound organelle containing genetic material and serves as the primary structure of interest in histopathological analysis. Nuclear morphology, including size, shape, texture, and spatial distribution, provides critical diagnostic information. In cancer diagnosis, malignant cells often exhibit nuclear atypia: enlarged nuclei, irregular shapes, hyperchromasia (increased staining intensity), and abnormal mitotic figures.
 
-\begin{figure}[h]
+A fundamental challenge in nuclei analysis is that nuclei in tissue sections are densely packed and frequently overlap, forming clumped clusters where individual boundaries are difficult to distinguish even for expert pathologists. This overlapping occurs because tissue sections are typically cut at a thickness of 3--5 $\mu$m, which is comparable to or smaller than the diameter of many nuclei (typically 5--10 $\mu$m). As a result, multiple nuclei at different depths within the section are projected onto the same 2D image plane, creating the appearance of clumped or touching nuclei. This is not merely an artifact of imaging resolution but an inherent property of projecting 3D tissue architecture onto a 2D plane, motivating the development of automated methods capable of both accurately delineating individual nuclear boundaries and correctly separating touching or overlapping nuclei.
+
+\subsubsection{Tumor-Infiltrating Lymphocytes and Clinical Significance}
+
+Tumor-infiltrating lymphocytes (TILs) are immune cells, primarily lymphocytes and plasma cells, that have migrated into the tumor microenvironment. The presence and density of TILs reflect the host immune response against the tumor and have been established as a prognostic biomarker in multiple cancer types. Higher TILs levels are generally associated with improved outcomes, particularly in triple-negative and HER2-positive breast cancers, where they predict better response to chemotherapy and longer survival.
+
+The International TILs Working Group, convened by Salgado et al. \cite{salgado2015evaluation}, established standardized guidelines for TILs assessment in clinical practice. The recommended metric is \textbf{stromal TILs (sTILs)}, defined as the proportion of stromal area occupied by mononuclear inflammatory cells within the invasive tumor border:
+
+\begin{equation}
+	\text{sTILs (\%)} = \frac{\text{Area of mononuclear inflammatory cells in stroma}}{\text{Total intratumoral stromal area}} \times 100
+\end{equation}
+
+Only lymphocytes and plasma cells are included; polymorphonuclear leukocytes are excluded. Areas of necrosis, crush artifact, fibrosis, and hyalinization at the tumor border are also excluded from the assessment. The score is reported as a single average percentage per tumor on H\&E-stained full-tissue sections.
+
+Clinically, tumors with sTILs $\geq$ 50\% are classified as lymphocyte-predominant breast cancer (LPBC), indicating a strong immune response. Additional commonly used thresholds include sTILs < 10\% (TILs-low) and sTILs $\geq$ 30\% (TILs-high in many triple-negative breast cancer studies).
+
+This scoring methodology is fundamentally an \textit{area-based} measurement: it requires accurately delineating the boundary of each lymphocyte to compute its area contribution, not merely detecting its presence or counting its centroid. This distinction has direct implications for the design of automated nuclei analysis systems. Object detection models that output only bounding boxes or centroids are insufficient for sTILs scoring because they discard boundary geometry. Accurate sTILs computation requires methods that can both detect individual cells and delineate their boundaries, particularly in densely clumped regions where cell boundaries are ambiguous.
+
+\subsection{Digital Pathology Imaging}
+
+\subsubsection{Tissue Slicing and Scanning}
+
+The digitization of histopathology slides produces whole-slide images (WSIs) through specialized scanners that capture high-resolution images of the entire tissue section. Modern slide scanners, such as those from Hamamatsu, Leica, and 3DHistech, use line-sensor or area-sensor cameras mounted on motorized stages to systematically capture overlapping tiles that are subsequently stitched into a single large image.
+
+WSIs are typically stored in multi-resolution pyramidal formats (e.g., Aperio SVS, Hamamatsu NDP, or generic TIFF), where each level provides a different magnification. The spatial resolution of a WSI is specified in microns per pixel (MPP), which depends on the objective lens magnification used during scanning. Common resolutions range from approximately 0.25 MPP (equivalent to 40$\times$ magnification) to 0.5 MPP (20$\times$). At 0.25 MPP, a typical biopsy slide can produce an image exceeding 50,000 $\times$ 50,000 pixels, necessitating patch-based processing strategies for computational analysis.
+
+\subsubsection{Staining and its Variants}
+
+Tissue staining is essential because most biological tissues are nearly transparent under standard brightfield microscopy. Stains introduce contrast by selectively binding to tissue components through chemical interactions. The most widely used staining protocol in histopathology is Hematoxylin and Eosin (H\&E) staining.
+
+Hematoxylin is a basic (positively charged) dye that binds to acidic structures such as DNA and RNA, coloring nuclei dark blue or purple. Eosin is an acidic (negatively charged) dye that binds to basic structures such as cytoplasmic proteins and extracellular matrix, coloring them pink. The combination produces the characteristic appearance of H\&E-stained tissue: blue-purple nuclei against a pink cytoplasmic and stromal background.
+
+Beyond H\&E, several specialized stains are used in clinical practice: Periodic Acid-Schiff (PAS) for basement membranes and glycogen, Masson's Trichrome for collagen fibers, and immunohistochemical (IHC) stains for specific protein markers. Each stain produces distinct color characteristics that can be mathematically decomposed for computational analysis.
+
+\subsubsection{Beer-Lambert Law and Optical Density}
+
+The interaction of light with stained tissue follows the Beer-Lambert law, which describes the relationship between light absorption and the concentration of absorbing material. For a stained tissue sample, the transmitted intensity $I$ at a given wavelength is related to the incident intensity $I_0$ by:
+
+\begin{equation}
+	I = I_0 \cdot e^{-\alpha \cdot c \cdot d}
+\end{equation}
+
+where $\alpha$ is the molar absorptivity (extinction coefficient), $c$ is the concentration of the stain, and $d$ is the path length through the tissue. The optical density (OD) is defined as:
+
+\begin{equation}
+	\text{OD} = -\log_{10}\left(\frac{I}{I_0}\right) = \alpha \cdot c \cdot d \cdot \log_{10}(e)
+\end{equation}
+
+In the context of digital pathology, the RGB pixel values of a scanned image are proportional to transmitted light intensity. Converting from RGB to optical density space is essential because OD is linearly additive: if multiple stains are present, the total OD at each pixel equals the sum of the OD contributions from each individual stain. This linearity property underpins color deconvolution methods.
+
+\subsubsection{Stain Vectors}
+
+A stain vector represents the characteristic color signature of a specific stain in optical density space. For an RGB image, each stain is described by a 3-element unit vector $\mathbf{s} = [s_R, s_G, s_B]^T$ in OD space, where each component indicates the stain's relative absorption at the red, green, and blue channels.
+
+For H\&E staining, the two stain vectors are:
+\begin{itemize}
+	\item \textbf{Hematoxylin vector} $\mathbf{s}_H$: characterizes the absorption pattern of hematoxylin, which strongly absorbs in the blue-green range, producing its characteristic dark blue appearance.
+	\item \textbf{Eosin vector} $\mathbf{s}_E$: characterizes the absorption pattern of eosin, which absorbs primarily in the green range, producing its pink appearance.
+\end{itemize}
+
+When two stains are present, the stain matrix $S$ is formed by concatenating the stain vectors as columns: $S = [\mathbf{s}_H \quad \mathbf{s}_E]$. For three-stain protocols, a third column is added.
+
+\subsubsection{Stain Vector Estimation Methods}
+
+Since stain appearance varies across scanners, laboratories, and tissue types, the stain vectors must be estimated from each individual image or dataset. Several methods exist for automatic stain vector estimation:
+
+\textbf{Macenko's method} estimates stain vectors by analyzing the distribution of pixel OD values in the image. Pixels are converted to OD space, and those with extreme OD values (typically the top 1\%) are identified. Singular Value Decomposition (SVD) is then applied to these pixels, and the two principal angles corresponding to the strongest eigenvectors define the stain directions. The resulting vectors are then projected onto a predefined stain color space to assign hematoxylin and eosin identities.
+
+\textbf{Vahadane's method} uses non-negative matrix factorization (NMF) to simultaneously estimate the stain matrix and the stain density maps. This approach enforces sparsity constraints and non-negativity, which are physically meaningful since stain concentrations cannot be negative.
+
+The choice of estimation method affects downstream stain normalization quality. Macenko's method is widely used due to its simplicity and robustness, while Vahadane's method produces more accurate separations at the cost of higher computational complexity.
+
+\subsubsection{Color Deconvolution}
+
+Color deconvolution is the process of separating an H\&E-stained image into its individual stain channels. Given the stain matrix $S$ and the OD image $\mathbf{v}$ (a pixel vector in OD space), the stain concentrations $\mathbf{c}$ for each pixel are obtained by solving the linear system:
+
+\begin{equation}
+	\mathbf{v} = S \cdot \mathbf{c}
+\end{equation}
+
+Since $S$ is a $3 \times 2$ matrix (for H\&E) or $3 \times 3$ (for three stains), the system can be solved using the pseudoinverse:
+
+\begin{equation}
+	\mathbf{c} = S^{-1} \cdot \mathbf{v}
+\end{equation}
+
+where $S^{-1}$ denotes the pseudoinverse (or inverse, for square $S$). The resulting stain concentration maps $\mathbf{c}$ provide separate grayscale images representing the hematoxylin and eosin density at each pixel. The hematoxylin channel is particularly useful for nuclei detection algorithms, as it isolates nuclear staining from cytoplasmic and stromal background.
+
+\subsubsection{Stain Normalization}
+
+Stain normalization addresses the significant color variation that exists across WSIs captured from different scanners, hospitals, or staining batches. This variation, if uncorrected, degrades the performance of deep learning models trained on data from one source and applied to another.
+
+The standard approach to stain normalization involves three steps: (1) estimate the stain matrix $S_{\text{source}}$ from the source image using one of the methods described above, (2) compute the stain concentration map $\mathbf{c} = S_{\text{source}}^{-1} \cdot \mathbf{v}_{\text{source}}$, and (3) reconstruct the normalized image using a target stain matrix $S_{\text{target}}$: $\mathbf{v}_{\text{normalized}} = S_{\text{target}} \cdot \mathbf{c}$, then convert back from OD to RGB space.
+
+This process preserves the structural content of the image while standardizing color appearance. Stain normalization is commonly applied as a preprocessing step before training or inference in computational pathology pipelines.
+
+\subsection{Convolutional Neural Networks}
+
+\subsubsection{Convolution and Feature Extraction}
+
+Convolutional Neural Networks (CNNs) form the backbone of modern computer vision. The fundamental operation in a CNN is the convolution, where a learnable filter $\mathbf{W}$ of size $k \times k$ is slid across the input feature map $\mathbf{X}$ to produce an output feature map $\mathbf{Y}$. For a spatial position $(i, j)$, the convolution output is computed as:
+
+\begin{equation}
+	\mathbf{Y}(i, j) = \sum_{m=0}^{k-1} \sum_{n=0}^{k-1} \mathbf{W}(m, n) \cdot \mathbf{X}(i + m, j + n) + b
+\end{equation}
+
+where $b$ is a learnable bias term. Each convolutional layer applies multiple such filters, producing a set of feature maps that capture local spatial patterns such as edges, textures, and more complex structures. By stacking convolutional layers with nonlinear activation functions (typically ReLU) and pooling layers that reduce spatial dimensions, CNNs learn hierarchical representations ranging from low-level features to high-level semantic concepts.
+
+\subsubsection{Fully Convolutional Networks and Dense Prediction}
+
+Fully Convolutional Networks (FCNs) replace the fully connected layers of traditional CNNs with convolutional layers, enabling dense, per-pixel predictions without requiring fixed-size inputs. Given an input image of size $H \times W$, an FCN produces a spatial output map of size $H' \times W'$ where each spatial location contains a prediction vector. This makes FCNs naturally suited for dense prediction tasks such as semantic segmentation and object detection.
+
+The absence of fully connected layers preserves spatial relationships and allows variable input sizes. Critically, for nuclei detection, FCN-based architectures are preferred for edge deployment because their computational complexity scales linearly with the number of input pixels, $O(H \times W)$, unlike transformer-based architectures whose self-attention mechanism scales quadratically, $O((H \times W)^2)$. This difference becomes significant for high-resolution histopathology images.
+
+\subsubsection{Receptive Fields and Large Kernels}
+
+The receptive field of a neuron in a CNN is the spatial region in the input that influences its output. For a stack of $L$ convolutional layers each with kernel size $k$ and stride 1, the effective receptive field grows linearly with depth. Traditional architectures use small kernels (typically $3 \times 3$) and rely on deep stacking, but this approach suffers from diminishing returns: the effective receptive field grows slower than the theoretical receptive field, and deeper networks become harder to optimize.
+
+Large kernel convolutions (e.g., $31 \times 31$) provide an alternative approach to achieving large receptive fields with fewer layers. LKCell \cite{cui2024lkcell} demonstrated that transferring pre-trained large kernel models to histopathology significantly improves nuclei segmentation accuracy while reducing computational cost. The key insight is that large kernels achieve broad spatial context in a single layer, capturing tissue architecture and cell neighborhood information that is critical for accurate boundary prediction. Using depthwise separable convolutions, the computational overhead of large kernels can be kept manageable, making them practical for efficient FCN-based architectures.
+
+\subsection{Nuclei Detection}
+
+\subsubsection{Detection Paradigms}
+
+Object detection frameworks locate and classify objects within images by producing bounding boxes with associated class labels and confidence scores. Two dominant paradigms exist in the literature.
+
+\textbf{Two-stage detectors}, exemplified by Faster R-CNN \cite{ren2015faster}, first propose candidate regions using a Region Proposal Network (RPN) and then classify and refine each proposal independently. This approach achieves high accuracy but is computationally expensive due to the per-region processing.
+
+\textbf{Single-stage detectors}, exemplified by YOLO \cite{redmon2016yolo}, simultaneously predict bounding boxes and class probabilities across a spatial grid in a single forward pass. This paradigm is significantly faster and more suitable for real-time applications, making it the preferred choice for resource-constrained edge deployment. YOLO divides the input image into an $S \times S$ grid, and each grid cell predicts $B$ bounding boxes with confidence scores and $C$ class probabilities.
+
+Both paradigms output axis-aligned bounding boxes defined by $(x_c, y_c, w, h)$, where $(x_c, y_c)$ is the box center and $(w, h)$ are the width and height. While efficient for localization, this rectangular representation discards all boundary geometry.
+
+\subsubsection{Non-Maximum Suppression}
+
+Non-maximum suppression (NMS) is a post-processing step used by all conventional detection frameworks to eliminate redundant detections. Since detectors typically produce multiple overlapping predictions for a single object, NMS selects the highest-scoring prediction and suppresses all others whose overlap, measured by Intersection over Union (IoU), exceeds a threshold $\theta_{\text{NMS}}$ (typically 0.5). Formally, given a set of detections sorted by confidence score $\{d_1, d_2, \ldots, d_N\}$, NMS iteratively selects the highest-scoring detection $d_i$ and removes all $d_j$ where:
+
+\begin{equation}
+	\text{IoU}(d_i, d_j) > \theta_{\text{NMS}}
+\end{equation}
+
+While effective for isolated objects, NMS is problematic for nuclei detection because densely packed nuclei produce legitimately overlapping predictions. In clumped regions, two adjacent nuclei may have bounding boxes with high IoU, causing NMS to suppress the correct detection of one nucleus. This leads to systematic undercounting in precisely the regions where accurate counting matters most for clinical assessment such as sTILs scoring. The severity of this problem increases with nuclear density, creating an inverse relationship between detection accuracy and the clinical importance of the region.
+
+\subsubsection{Limitations of Detection for Nuclei Analysis}
+
+The bounding box representation has two fundamental limitations for nuclei analysis. First, bounding boxes discard boundary geometry. For sTILs scoring, the clinical standard requires measuring the \textit{area} occupied by lymphocytes, not merely counting their centroids. A bounding box provides only a rough rectangular approximation that significantly overestimates cell area, introducing systematic bias into the sTILs calculation. Second, as described above, NMS-based post-processing undercounts in dense regions. Together, these limitations mean that detection models are insufficient for the area-based measurements required in clinical workflows, despite their computational efficiency.
+
+\subsection{Nuclei Segmentation}
+
+\subsubsection{Instance Segmentation Paradigm}
+
+Instance segmentation combines object detection with pixel-level boundary delineation, producing a separate binary mask for each individual object. This addresses the geometry limitation of detection models by providing accurate per-cell boundaries. The dominant approach in general computer vision is Mask R-CNN \cite{he2017mask}, which extends Faster R-CNN with a mask prediction branch that outputs a binary segmentation mask for each detected region.
+
+In histopathology, U-Net \cite{ronneberger2015u} and its variants have been widely adopted. U-Net uses an encoder-decoder architecture with skip connections that preserve fine-grained spatial information. The encoder extracts features at progressively lower resolutions, while the decoder upsamples these features back to the input resolution. Skip connections concatenate encoder features with decoder features, enabling precise boundary localization.
+
+HoVer-Net \cite{graham2019hover} introduced a specialized approach for nuclei by predicting horizontal and vertical distance maps from each pixel to its nearest nucleus centroid, providing additional discriminative signal for separating touching nuclei during post-processing.
+
+\subsubsection{Limitations of Segmentation for Nuclei Analysis}
+
+Instance segmentation methods face two significant limitations in the context of nuclei analysis.
+
+First, the computational cost is high. Pixel-level mask prediction requires high-resolution feature maps and substantial memory, making these methods impractical for real-time analysis of whole-slide images on resource-constrained hardware. The post-processing step required to convert dense predictions into individual instances (e.g., watershed, connected component analysis) adds further computational overhead.
+
+Second, the clumped cell problem persists. FCN-based segmentation models produce contiguous probability maps, and when nuclei are tightly packed, the predicted masks for adjacent cells merge into a single connected region. Post-processing methods such as watershed can separate some instances, but they frequently fail in regions of high nuclear density where boundary information is ambiguous. This merging leads to systematic undercounting because merged cells are counted as a single instance. Note that this computational burden stems not from the convolutional architecture itself, but from the costly post-processing required to separate individual instances.
+
+\subsection{Polygon-Based Instance Segmentation}
+
+\subsubsection{Star-Convex Polygon Representation}
+
+\begin{figure}[htbp]
 	\centering
-	\includegraphics[width=12cm]{contents/chapter-2/gambar-buatan-sendiri.png}
-	\caption[Contoh gambar]{Contoh gambar \cite{lukito2016}}
-	\label{Fig:gambar-buatan-sendiri}
+	\input{contents/chapter-2/fig/star-convex}
+	\caption{Star-convex polygon representation. (a) A nucleus boundary is represented by a centroid $\mathbf{c}$ and $n$ radial distances $\{d_0, d_1, \ldots, d_{n-1}\}$ measured at fixed angular intervals $\theta_i = \frac{2\pi i}{n}$. (b) The representation applied to a real cell image, where the polygon approximates the cell boundary.}
+	\label{fig:star-convex}
 \end{figure}
 
+Star-convex polygons offer a compact parametric representation of cell boundaries that bridges the gap between detection efficiency and segmentation accuracy. A star-convex polygon is defined by a center point $\mathbf{c} = (c_x, c_y)$ and a set of $n$ radial distances $\{d_1, d_2, \ldots, d_n\}$ measured at fixed angular intervals $\theta_i = \frac{2\pi i}{n}$ for $i = 0, 1, \ldots, n-1$. The polygon boundary is reconstructed as:
+
+\begin{equation}
+	\mathbf{p}_i = \mathbf{c} + d_i \cdot [\cos\theta_i, \sin\theta_i]^T
+\end{equation}
 
 
-\textit{Game design document} adalah sebuah bagian penting dalam pembuatan game baik itu elemen-elemen penyusunnya maupun proses pengembangannya. Game design yang telah dibuat, dijabarkan satu persatu mengenai tahapan dalam pembuatan game dan hasilnya disatukan dalam bentuk dokumentasi \textit{game design document} yang digunakan oleh \textit{developer} sebagai buku petunjuk bagaimana membuat \textit{game} \cite{lukito2016}.
+StarDist \cite{schmidt2018cell} introduced this representation for cell detection in fluorescence microscopy, later extended to histopathology images \cite{weigert2022stardist}. The representation is efficient because it parameterizes the entire boundary with $n + 2$ values (center coordinates plus $n$ distances), compared to the thousands of pixels required for a segmentation mask. However, StarDist operates within a dense prediction framework followed by NMS-based post-processing, inheriting the undercounting problem in clumped regions.
 
-Dalam buku \textit{Game Design Essentials} disebutkan \textit{game design document} merupakan metode yang menghubungkan elemen-elemen penyusun \textit{game}, baik itu \textit{art, sound, program, 
-gameplay} sehingga semuanya terdokumentasi menjadi satu dan menjadi acuan bagi para \textit{developer} dalam membuat \textit{game} \cite{wibirama2013dual}. 
+\subsubsection{PolarMask: Polar IoU and Centerness}
 
-\subsection{Dasar Teori Lainnya}
+PolarMask \cite{xie2020polarmask} integrated the polar polygon representation into a single-shot detection framework, eliminating the need for a separate dense prediction stage. PolarMask formulates instance segmentation as two simultaneous tasks: (1) center point classification, predicting whether each spatial location is an object center, and (2) dense distance regression, predicting $n$ radial distances at each positive center location.
+
+PolarMask introduced two key innovations. The \textbf{PolarIoU loss} directly optimizes the overlap between the predicted and ground truth polygons by computing IoU in polar coordinates, providing a more geometrically meaningful supervision signal than individual distance regression losses. The \textbf{centerness branch} predicts a scalar value for each spatial location indicating how close it is to the true object center, defined as:
+
+\begin{equation}
+	\text{centerness} = \sqrt{\frac{\min(l^*, r^*)}{\max(l^*, r^*)} \times \frac{\min(t^*, b^*)}{\max(t^*, b^*)}}
+\end{equation}
+
+where $l^*, r^*, t^*, b^*$ are the distances from the location to the left, right, top, and bottom boundaries of the object. This down-weights predictions from locations far from the true center, reducing low-quality detections and improving overall accuracy.
+
+\subsubsection{Boundary Refinement (CPP-Net)}
+
+CPP-Net \cite{chen2023cppnet} identified that predicting radial distances from a single centroid pixel provides insufficient contextual information for robust boundary prediction. To address this, CPP-Net samples a \textit{point set} rather than one single pixel within each cell for distance prediction, substantially enhancing the contextual information available to the model.
+
+The predictions from the sampled point set are adaptively fused using a \textbf{Confidence-based Weighting Module} that learns to assign higher weights to predictions from more informative sampling locations. Additionally, CPP-Net introduced a \textbf{Shape-Aware Perceptual (SAP) loss} that constrains the shape of predicted polygons by comparing them against a reference representation through a pre-trained auxiliary network. Despite these improvements, CPP-Net still operates within a dense prediction framework with NMS-based post-processing, inheriting the same limitations regarding clumped cell separation.
+
+\subsection{End-to-End Detection with Bipartite Matching}
+
+\subsubsection{Set Prediction and the Hungarian Algorithm}
+
+The DETR (DEtection TRansformer) framework introduced a paradigm shift by replacing hand-designed components such as anchor boxes and NMS with a set prediction approach. DETR formulates detection as a bipartite matching problem between a fixed-size set of $N$ predictions $\hat{\mathcal{Y}} = \{\hat{y}_1, \ldots, \hat{y}_N\}$ and ground truth objects $\mathcal{Y} = \{y_1, \ldots, y_M\}$ (with $N \geq M$, padded with $\emptyset$ for the ``no object'' class).
+
+The optimal assignment $\sigma^*$ is found by solving:
+
+\begin{equation}
+	\sigma^* = \arg\min_{\sigma \in \Pi_N} \sum_{i=1}^{N} \mathcal{L}_{\text{match}}(y_i, \hat{y}_{\sigma(i)})
+\end{equation}
+
+where $\Pi_N$ is the set of all permutations of $N$ elements, and $\mathcal{L}_{\text{match}}$ is a pairwise matching cost that typically combines classification loss, bounding box $\ell_1$ loss, and IoU loss. This optimization is solved exactly using the Hungarian algorithm in $O(N^3)$ time. Once the optimal assignment is found, the model is trained end-to-end with a Hungarian loss computed only on matched pairs:
+
+\begin{equation}
+	\mathcal{L}_{\text{Hungarian}} = \sum_{i=1}^{N} \mathcal{L}(y_i, \hat{y}_{\sigma^*(i)})
+\end{equation}
+
+This formulation ensures that each ground truth object is matched to exactly one prediction, eliminating the need for NMS entirely. The key advantage for nuclei detection is that overlapping predictions are no longer suppressed; instead, the learned assignment naturally resolves which prediction corresponds to which nucleus.
+
+\subsubsection{LSP-DETR: Star-Convex Polygons with Learned Assignment}
+
+LSP-DETR \cite{pekar2026lsp} adapted the end-to-end detection framework to nuclei segmentation by combining bipartite matching with star-convex polygon representation. Each prediction consists of a class label, bounding box coordinates, and a set of radial distances defining a star-convex polygon boundary. The matching cost and training loss are extended to include a radial distance term that measures the accuracy of the predicted polygon shape.
+
+The Hungarian matching assigns each ground truth nucleus to exactly one prediction, and the model is trained end-to-end with a combined loss that includes classification, bounding box, and polygon distance terms. This eliminates NMS entirely, resolving the undercounting problem in clumped regions: star-convex polygons naturally overlap in dense areas without being suppressed, enabling accurate instance separation.
+
+LSP-DETR demonstrated strong generalization across tissue types and was over five times faster than the next-fastest leading method. However, its transformer-based backbone imposes quadratic computational complexity, making it demanding for edge deployment. RayCastED adopts LSP-DETR's assignment mechanism and polygon representation while replacing the transformer backbone with an FCN, preserving the benefits of end-to-end matching with reduced computational cost suitable for resource-constrained environments.
 
 \section{Analisis Perbandingan Metode}
 
@@ -39,4 +274,3 @@ Di dalam tinjauan pustaka hasil akhirnya adalah analisis secara kualitatif atau 
 \section{Pertanyaan Tugas Akhir (Jika Perlu)}
 
 Pertanyaan tugas akhir bersifat opsional dan dapat ditambahkan untuk menekankan hal-hal yang hendak diketahui dari tugas akhir berdasar pada tujuan tugas akhir. Pertanyaan tugas akhir dikenal dengan RQ (\textit{Research Question}) dan harus memiliki keterkaitan dengan RO (\textit{Research Objective}). Satu RO dapat memiliki satu atau lebih dari satu RQ. 
-

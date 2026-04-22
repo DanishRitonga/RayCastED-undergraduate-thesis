@@ -1,40 +1,28 @@
-\chapter{Metode Penelitian}
+\chapter{Research Methodology}
 
-Bab ini menjelaskan metode atau cara yang digunakan dalam penelitian ini untuk 
-mencapai maksud dan tujuan seperti yang tertulis dalam sub-bab 1.3 [jika diinginkan, kalian dapat menuliskan Kembali tujuan penelitian yang ingin dicapai di sini].
+\section{Datasets}
 
-\section{Alat dan Bahan Tugas akhir (Opsional)}
+This study uses publicly available secondary datasets for training and evaluation. Table~\ref{tab:datasets} summarizes the datasets and their roles.
 
-\subsection{Alat Tugas akhir}
+\input{contents/chapter-3/tab/data}
 
-Alat-alat yang digunakan pada tugas akhir ini berupa perangkat keras maupun perangkat lunak sebagai sarana pendukung antara lain. Kemukakan secara detail sesuai dengan kebutuhan tugas akhir dan juga tambahkan spesifikasi minumum sehingga peneliti lain yang hendak melakukan hal yang sama bisa melakukannya :
+\subsection{PanNuke}
 
-\begin{enumerate}
-	\item \textit{Notebook} dengan spesifikasi minumum sistem operasi Windows 8, \textit{processor} Intel Core i3 2330M CPU @ 2,2 GHz, memori 4GB DDR3, grafis NVIDIA GeForce GT 610 (4GB), hardisk 500GB. Pada tugas akhir ini digunakan Windows 10, Intel Core i7 4570M CPU, Memori 4GB DDR 3, grafis Intel HD4300. 
-	\item \textit{Smartphone} dengan spesifikasi tipe minimum, OS Android OS v4.1.2 (Jelly Bean),CPU Dual-core 800 MHz, GPU Mali-400, Internal 4 GB, 768 MB RAM. Pada tugas akhir ini digunakan ....
-	\item \textit{Game creation platform} versi 3.3.2 untuk Stencyl dan Construct2.
-	\item CORELDRAW X7, Tiled dan GIMP 2
-\end{enumerate}
+PanNuke \cite{gamper2019pannuke, gamper2020pannuke} is a large-scale pan-cancer nucleus instance segmentation dataset containing approximately 189,744 labeled nuclei across 19 tissue types. Each nucleus is annotated with an instance mask and one of five nuclear categories. The dataset is provided as pickled bytes containing image patches and corresponding label masks. In this study, PanNuke serves as the primary benchmarking dataset for evaluating nuclei detection and segmentation performance.
 
-\subsection{Bahan Tugas akhir}
+\subsection{PUMA}
 
-Bahan tugas akhir adalah segala sesuatu yang bersifat fisik atau digital yang digunakan untuk kebutuhan tugas akhir. Bahan tugas akhir dapat berupa:
+PUMA (Melanoma Histopathology Dataset with Tissue and Nuclei Annotations) \cite{schuiveling2025puma} provides annotated histopathology images for TILs detection in melanoma tissue. The dataset is distributed as TIFF images paired with GeoJSON annotation files containing polygon-level cell boundary annotations. This dataset is used to evaluate RayCastED's ability to detect and delineate TILs in a clinically relevant setting.
 
-\begin{enumerate}
-	\item Bahan habis pakai. Bahan yang digunakan untuk tugas akhir. Sebagai contoh 
-	mungkin dibutuhkan kertas transparansi, baterai, atau yang lain 
-	\item Bahan yang berupa data atau informasi yang menjadi dataset tugas akhir. Dataset tugas akhir dapat berupa:
-	\begin{itemize}
-		\item Dataset pihak lain yang diperoleh dengan izin atau dalam lisensi yang diizinkan untuk digunakan secara langsung 
-		\item Dataset pihak pertama yang disusun sendiri melalui quisioner, observasi, atau interview 
-		\item Dokumen panduan yang mengacu pada standar, hasil tugas akhir, atau artikel yang disitasi dan digunakan.
-	\end{itemize}
-	
-\end{enumerate}
+\subsection{panopTILs}
 
+panopTILs \cite{liu2022panoptils} provides TILs annotations on breast cancer histopathology images. The dataset is distributed as PNG image patches with corresponding annotation files. This dataset supplements the TILs evaluation alongside PUMA, providing breast tissue samples for assessing TILs detection performance across cancer types.
 
+\subsection{MoNuSAC}
 
-\section{Metode yang Digunakan}
+MoNuSAC \cite{verma2021monusac} provides annotated nuclei across multiple organ types with four nuclear categories: epithelial, lymphocyte, neutrophil, and macrophage. The dataset is provided as pickled bytes. The lymphocyte annotations in MoNuSAC are particularly relevant for evaluating TILs detection, as lymphocytes are the primary cell type of interest in TILs scoring.
+
+\section{Methods}
 
 Bagian ini membahas metode atau cara yang akan digunakan dalam penelitian, tahapan 
 penerapan metode, dan desain penelitian (misalnya apakah penelitian akan menggunakan 
@@ -43,12 +31,14 @@ penelitian alat ukur hama yang dapat dilakukan di laboratorium ataupun di lapang
 
 Bagian ini juga membahas bagaimana data [akan] dianalisis, apakah dengan membandingkan keluaran beberapa alat ukur, membandingkan dengan standar atau bagaimana.
 
-\section{Alur Tugas Akhir}
+\section{Research Workflow}
+
+\begin{figure}[htbp]
+	\centering
+	\resizebox{\textwidth}{!}{\input{contents/chapter-3/fig/raycasted}}
+	\caption{YOLO26 architecture.}
+	\label{fig:yolo26}
+\end{figure}
 
 Menguraikan prosedur yang akan digunakan dan jadwal atau alur penyelesaian setiap 
 tahap. Alur penelian ini dapat disajikan dalam bentuk diagram. Diagram dapat disusun dengan aturan yang baik semisal menggunakan \textit{flowchart}. Aturan dan tutorial pembuatan \textit{flowchart} dapat dilihat di \textcolor{blue}{http://ugm.id/flowcharttutorial}. Setelah menggambarkannya, penulis wajib menjelaskan langkah-langkah setiap alur tugas akhir dalam sub bab tersendiri sesuai dengan kebutuhan.
-
-\section{Etika, Masalah, dan Keterbatasan Penelitian (Opsional))}
-
-Bagian ini membahas pertimbangan etis penelitian dan [potensi] masalah serta
-keterbatasannya. Jika menyangkut penelitian dengan makhluk hidup, maka dibutuhkan adanya \textit{ethical clearance}, di bagian ini hal itu akan dibahas. Demikian juga tentang keterbatasan ataupun masalah yang akan timbul.

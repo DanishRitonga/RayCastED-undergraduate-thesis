@@ -1,274 +1,86 @@
-\chapter{Pendahuluan}
+\chapter{Introduction}
 
-\section{Latar Belakang}
+\section{Background}
 
-Sub-bab ini berisi uraian tentang latar belakang atau justifikasi ilmiah (dari \textit{paper} dan jurnal) dari permasalahan yang akan diteliti, alasan penelitian dan penelitian yang pernah dilakukan sebelumnya terkait fenomena tersebut.
+Tumor-infiltrating lymphocytes (TILs) density has emerged as an established prognostic biomarker in multiple cancer types. The International TILs Working Group has developed standardized guidelines for TILs assessment, which recommend estimating the percentage of stromal area occupied by lymphocytes under a microscope \cite{salgado2015evaluation}. This scoring methodology is fundamentally an \textit{area-based} measurement, which depends on accurately delineating cell boundaries rather than merely locating their centroids.
 
-%HAPUS YANG TIDAK PERLU
-%-------------------------------------------------
-\noindent\textbf{Contoh latar belakang penelitian untuk teknik elektro:} \\
-\noindent\fbox{%
-	\parbox{\textwidth}{%
-				
-		\hspace{1cm} "Peningkatan konsumsi energi listrik yang terus menerus menyebabkan ketersediaan 
-		sumber energi yang semakin terbatas. Sumber energi terbarukan seperti solar dan angin 
-		menjadi solusi yang menjanjikan untuk memenuhi kebutuhan energi. Namun, kapasitas 
-		produksi dan efisiensi dari sumber energi terbarukan masih sangat tergantung pada 
-		kondisi cuaca dan geografis. Oleh karena itu, perlu adanya sistem penyimpanan energi 
-		yang efisien dan dapat memastikan ketersediaan energi listrik secara kontinu. Penelitian 
-		ini akan mengevaluasi kemampuan superkapasitor dalam menyimpan dan mengirimkan 
-		energi secara efisien dan memastikan ketersediaan energi listrik secara kontinu."
-		
-	}%
-}
+However, manual TILs assessment presents significant challenges. The process is time-consuming, suffers from substantial inter-observer variability among pathologists, and becomes impractical when applied to whole-slide images (WSIs) at clinical scale. These limitations have motivated the development of automated approaches for nuclei detection and segmentation in histopathology images. 
 
-%-------------------------------------------------	
-\vspace{5mm}
-Latar belakang ini memperkenalkan masalah ketersediaan sumber energi dan 
-peningkatan konsumsi energi listrik yang terus menerus. Ini juga memperkenalkan solusi 
-yang menjanjikan dari sumber energi terbarukan dan menjelaskan mengapa perlu adanya 
-sistem penyimpanan energi yang efisien. Latar belakang ini memberikan dasar yang kuat 
-bagi perumusan masalah dan tujuan penelitian, memastikan bahwa hasil penelitian 
-memiliki relevansi dan signifikansi bagi bidang terkait.
+Critically, practical deployment in clinical settings presents additional constraints: many healthcare facilities, particularly in resource-constrained environments, require models that can run efficiently on edge devices rather than demanding powerful centralized computing infrastructure. This deployment constraint creates a fundamental tension: models must be accurate enough for clinical decision-making yet lightweight enough for practical use in real-world clinical workflows.
 
-%HAPUS YANG TIDAK PERLU
-%-------------------------------------------------
-\noindent\textbf{Contoh latar belakang penelitian untuk teknik biomedis:} \\
-\noindent\fbox{%
-	\parbox{\textwidth}{%
-		
-		\hspace{1cm} "Diagnosis dan pengobatan penyakit memerlukan integrasi informasi medis yang 
-		akurat dan terkini. Alat diagnostik tradisional seperti CT scan dan MRI memiliki resolusi 
-		yang tinggi dan dapat mengidentifikasi masalah pada tingkat sel, tetapi sering 
-		memerlukan banyak waktu dan biaya. Alat deteksi dini seperti tes darah dan urin memiliki 
-		biaya rendah dan mudah digunakan, tetapi sering kurang akurat dan tidak memberikan gambaran yang jelas tentang masalah medis. Oleh karena itu, penting untuk menemukan metode baru yang memadukan keunggulan dari kedua jenis alat tersebut. Penelitian ini akan mengevaluasi kemampuan nanopartikel dalam meningkatkan akurasi dan efisiensi diagnosis medis."
-		
-	}%
-}
+Automated approaches for nuclei detection in histopathology images can be broadly categorized into three paradigms, each with distinct trade-offs. \textbf{Instance segmentation methods} such as U-Net \cite{ronneberger2015u} and Mask R-CNN \cite{he2017mask} produce accurate boundary delineations but are computationally expensive, particularly for whole-slide image analysis. \textbf{Vision transformer-based models} like CellViT \cite{cabrielli2023vit} demonstrate strong performance on histopathology tasks, but their self-attention mechanisms impose quadratic complexity in both memory and computational requirements, making them less suitable for resource-constrained deployment. In contrast, \textbf{object detection frameworks} including Faster R-CNN \cite{ren2015faster} and YOLO \cite{redmon2016yolo} offer fast, lightweight inference at the cost of discarding boundary geometry information through bounding box representations, which is insufficient for area-based TILs scoring.
 
-%-------------------------------------------------	
-\vspace{5mm}
-Latar belakang ini memperkenalkan masalah diagnostik dan pengobatan penyakit dan mempertimbangkan pentingnya integrasi informasi medis yang akurat dan terkini. Ini 
-juga memperkenalkan kelemahan dari alat diagnostik tradisional dan deteksi dini dan menjelaskan mengapa penting untuk menemukan metode baru yang memadukan 
-keunggulan dari kedua jenis alat tersebut. Latar belakang ini memberikan dasar yang kuat bagi perumusan masalah dan tujuan penelitian, memastikan bahwa hasil penelitian 
-memiliki relevansi dan signifikansi bagi bidang terkait.
+A fundamental challenge across all automated approaches is the \textbf{clumped cell problem}. Densely clustered nuclei are nearly impossible to separate in segmentation masks because fully convolutional network (FCN) based models produce contiguous predictions that merge adjacent cells, leading to systematic undercounting. The computational burden of FCN-based instance segmentation stems not from the convolutional architecture itself, but from the costly post-processing required to separate individual instances. For example, HoVer-Net \cite{graham2019hover} addresses this challenge using horizontal and vertical distance maps, while StarDist \cite{schmidt2018cell} represents cells as star-convex polygons to preserve boundary shape while maintaining per-cell separation. However, these methods still rely on two-stage pipelines (dense prediction followed by post-processing) and typically use non-maximum suppression (NMS), which suppresses overlapping predictions and risks undercounting in precisely the clumped regions where accurate counting matters most.
 
-%HAPUS YANG TIDAK PERLU
-%-------------------------------------------------
-\noindent\textbf{Contoh latar belakang penelitian untuk teknologi informasi:} \\
-\noindent\fbox{%
-	\parbox{\textwidth}{%
-		
-\hspace{1cm} "Dengan perkembangan teknologi informasi yang sangat pesat dalam beberapa tahun terakhir, penyimpanan data menjadi masalah yang semakin penting. Semakin banyak data yang diterima setiap hari, semakin penting bagi organisasi untuk memastikan bahwa data 
-mereka aman dan terlindungi. Pada saat yang sama, organisasi juga membutuhkan akses cepat dan efisien ke data mereka untuk membuat keputusan yang tepat. Teknologi 
-enkripsi kuantum baru-baru ini muncul sebagai solusi potensial untuk memenuhi kebutuhan ini, dengan menawarkan tingkat keamanan yang jauh lebih tinggi dan proses 
-enkripsi yang lebih cepat dibandingkan dengan teknologi enkripsi konvensional. Oleh karena itu, penting untuk mengevaluasi efektivitas dan keamanan teknologi enkripsi 
-kuantum dalam sistem penyimpanan data cloud."
-		
-	}%
-}
+Recent advances have sought to address the NMS dependency through end-to-end detection frameworks. LSP-DETR \cite{pekar2026lsp} adopts a DETR-style framework with learned assignment mechanisms, eliminating the need for NMS while representing nuclei as star-convex polygons. However, its transformer-based architecture remains computationally demanding for edge deployment scenarios. Meanwhile, CellPose-SAM \cite{stringer2023cellpose} has demonstrated superhuman generalization for cellular segmentation, though its computational profile may not be optimized for real-time edge deployment in clinical workflows.
 
-%-------------------------------------------------	
-\vspace{5mm}
-Latar belakang ini memperkenalkan masalah penyimpanan data dan mempertimbangkan pentingnya keamanan data. Ini juga memperkenalkan teknologi enkripsi kuantum sebagai solusi potensial dan menjelaskan mengapa evaluasi teknologi ini penting bagi bidang teknologi informasi. Latar belakang ini memberikan dasar yang kuat bagi perumusan masalah dan tujuan penelitian, memastikan bahwa hasil penelitian memiliki relevansi dan signifikansi bagi bidang terkait.
+\textbf{Research Gap:} No existing method combines polygon-based cell representation with a single-stage, end-to-end FCN detection architecture that eliminates NMS dependency while maintaining the lightweight computational profile necessary for edge deployment. This thesis addresses this gap by proposing \textbf{RayCastED}, an FCN-based adaptation of LSP-DETR that re-frames the star-convex representation as a \textit{raycast} representation (centroid plus fixed-angle radial rays), integrated directly into a YOLO-based detection head. By replacing the transformer backbone with an FCN, RayCastED maintains the lightweight profile needed for edge deployment through TensorRT and ONNX Runtime while preserving the end-to-end assigner-based framework that eliminates NMS, thereby addressing both boundary accuracy and clumped-cell separation with detection-level speed.
 
-\section{Rumusan Masalah}
+\subsection*{Key Points Outline}
 
-Sub-bab ini berisi poin-poin yang menjelaskan masalah atau isu yang akan diteliti dalam suatu penelitian. Ini mencakup formulasi masalah yang jelas dan spesifik dan 
-mempertimbangkan latar belakang dan deskripsi masalah yang terkait yang tertulis Dalam latar belakang pada sub-bab sebelumnya. Perumusan masalah yang baik akan membantu menentukan fokus penelitian dan memberikan dasar untuk tujuan dan hipotesis penelitian. Dalam penelitian, perumusan masalah memainkan peran penting dalam memastikan bahwa hasil penelitian berguna dan relevan untuk masalah yang diteliti.
-
-Jika rumusan masalah lebih dari 1, maka ditulis dengan format \textit{list}. Contoh sebagai  berikut:
+The following outline summarizes the main points covered in this section:
 
 \begin{enumerate}
-	\item Rumusan masalah 1.
-	\item Rumusan masalah 2.
+	\item \textbf{Clinical significance of TILs.} Tumor-infiltrating lymphocytes (TILs) density is an established prognostic biomarker in several cancers (e.g., the International TILs Working Group guidelines for breast cancer).
+	\item \textbf{How TILs are scored.} Pathologists estimate the percentage of stromal area occupied by lymphocytes under a microscope. This is fundamentally an \textit{area-based} measurement, which depends on accurately delineating cell boundaries, not just locating them.
+	\item \textbf{Manual problem.} This scoring is time-consuming, suffers from inter-observer variability, and is impractical at whole-slide image (WSI) scale. Furthermore, practical deployment in clinical settings, especially in resource-constrained environments, benefits from models that can run efficiently on edge devices.
+	\item \textbf{Automated approaches and trade-offs.}
+	\begin{itemize}
+		\item Instance segmentation (U-Net, Mask R-CNN): accurate boundaries but computationally expensive
+		\item Transformer-based models (CellViT, DINO-based): strong performance but self-attention imposes quadratic complexity in memory and compute. FCN-based architectures will almost always be lighter and more efficient due to their fixed, local receptive fields, making them inherently better suited for resource-constrained edge deployment.
+		\item Object detection (YOLO, Faster R-CNN): fast and lightweight but bounding boxes discard boundary geometry, insufficient for area-based scoring.
+	\end{itemize}
+	\item \textbf{The clumped cell problem.} A fundamental challenge across all approaches: densely clustered nuclei are nearly impossible to separate in segmentation masks because FCN-based models produce contiguous predictions that merge adjacent cells, leading to systematic undercounting. Note that the computational burden of FCN-based instance segmentation stems not from the convolutional architecture itself, but from the costly post-processing required to separate individual instances, which will be discussed in detail in later sections.
+	\item \textbf{Polygon-based detection as mitigation.} StarDist and similar methods represent cells as star-convex polygons, preserving boundary shape while maintaining per-cell separation. However, these rely on a two-stage pipeline (dense prediction $\rightarrow$ post-processing) and still use NMS, which suppresses overlapping predictions and risks undercounting in precisely the clumped regions that matter most. LSP-DETR addresses the NMS issue by adopting an end-to-end DETR-style framework with learned assignment, but its transformer-based architecture is computationally demanding for edge deployment.
+	\item \textbf{Gap and contribution.} No existing method combines polygon-based cell representation with a single-stage, end-to-end FCN detection architecture that avoids NMS dependency. This thesis proposes \textbf{RayCastED}, an FCN-based adaptation of LSP-DETR that re-frames the star-convex representation as a \textit{raycast} representation (centroid + fixed-angle radial rays), integrated directly into a YOLO-based detection head. By replacing the transformer backbone with an FCN, RayCastED maintains the lightweight profile needed for edge deployment (TensorRT, ONNX Runtime) while preserving the end-to-end assigner-based framework that eliminates NMS, addressing both boundary accuracy and clumped-cell separation with detection-level speed.
 \end{enumerate}
 
-%-------------------------------------------------
-\noindent\fbox{%
-	\parbox{\textwidth}{%
-\noindent\textbf{Contoh} perumusan masalah untuk \textbf{Teknik Elektro}: \\		
+\section{Problem Statement}
 
-\hspace{1cm} \textbf{"Bagaimana memperbaiki efisiensi penghematan energi pada sistem pencahayaan rumah tangga melalui implementasi teknologi kontrol otomatis?"} \\
+Based on the background discussed above, the following problems are identified:
+
+\begin{enumerate}
+	\item \textbf{Accuracy-deployment trade-off:} Existing methods force a choice between clinical accuracy and practical deployability. Segmentation models provide accurate boundaries but require computational resources unavailable in many clinical settings, while detection models offer lightweight deployment but lack the boundary geometry essential for TILs scoring.
 	
-\hspace{1cm} Perumusan masalah ini jelas dan spesifik dan menentukan fokus penelitian pada perbaikan efisiensi penghematan energi dalam sistem pencahayaan rumah tangga dengan menggunakan teknologi kontrol otomatis. Ini juga mempertimbangkan latar belakang tentang pentingnya penghematan energi dan memberikan solusi praktis melalui implementasi teknologi. Perumusan masalah ini memberikan dasar yang kuat untuk tujuan dan hipotesis penelitian dan memastikan bahwa hasil penelitian akan berguna bagi bidang teknik elektro.
-		
-	}%
-}
-
-%-------------------------------------------------
-\noindent\fbox{%
-	\parbox{\textwidth}{%
-\noindent\textbf{Contoh} perumusan masalah untuk \textbf{Teknik Biomedis}: \\		
-
-\hspace{1cm} \textbf{"Bagaimana memperbaiki akurasi deteksi kanker payudara dengan menggunakan teknologi pemindaian ultrasonografi berbasis AI?"} \\
-
-\hspace{1cm} Perumusan masalah ini jelas dan spesifik dan menentukan fokus penelitian pada 
-perbaikan akurasi deteksi kanker payudara dengan menggunakan teknologi pemindaian ultrasonografi berbasis AI. Ini mempertimbangkan latar belakang tentang pentingnya deteksi dini kanker payudara dan memberikan solusi praktis melalui implementasi teknologi. Perumusan masalah ini memberikan dasar yang kuat untuk tujuan dan hipotesis penelitian dan memastikan bahwa hasil penelitian akan berguna bagi bidang teknik biomedis.
-		
-	}%
-}
-
-%-------------------------------------------------	
-\noindent\fbox{%
-	\parbox{\textwidth}{%
-\noindent\textbf{Contoh} perumusan masalah untuk \textbf{Teknologi Informasi}: \\		
-
-\hspace{1cm} \textbf{"Bagaimana meningkatkan efisiensi dan keamanan sistem penyimpanan data cloud melalui implementasi teknologi enkripsi kuantum?"} \\
-
-\hspace{1cm} Perumusan masalah ini jelas dan spesifik dan menentukan fokus penelitian pada peningkatan efisiensi dan keamanan sistem penyimpanan data cloud dengan menggunakan teknologi enkripsi kuantum. Ini mempertimbangkan latar belakang tentang pentingnya keamanan data dan memberikan solusi praktis melalui implementasi teknologi. Perumusan masalah ini memberikan dasar yang kuat untuk tujuan dan hipotesis penelitian dan memastikan bahwa hasil penelitian akan berguna bagi bidang teknologi informasi.
-		
-	}%
-}
-
-%-------------------------------------------------	
-
-\section{Tujuan Penelitian}
-
-Tujuan penelitian pada skripsi Teknik (TE, TB, TIF) adalah menentukan sasaran atau target yang ingin dicapai melalui proses penelitian. Tujuan penelitian bisa beragam sesuai dengan bidang ilmu yang dipelajari, topik penelitian, dan permasalahan yang akan dicari solusinya.
-
-%Secara umum, tujuan penelitian pada skripsi bidang teknik adalah untuk:
-%
-%\begin{itemize}
-%	\item Mengidentifikasi dan menganalisis masalah atau permasalahan dalam bidang \textit{engineering}.
-%	\item Meningkatkan pemahaman dan wawasan tentang bidang \textit{engineering} melalui penerapan teori dan metodologi yang sesuai.
-%	\item Mengembangkan solusi atau produk baru yang inovatif dan efektif dalam 
-%	bidang \textit{engineering}.
-%	\item Menunjukkan penerapan prinsip-prinsip keteknikan dalam solusi atau produk yang dikembangkan.
-%	\item Menjelaskan implikasi dan rekomendasi dari hasil penelitian bagi bidang \textit{engineering} dan masyarakat.
-%\end{itemize}
-%
-%
-%\noindent Catatan: Tujuan penelitian dalam skripsi bidang teknik harus jelas, spesifik, terukur, dan dapat dicapai dalam jangka waktu yang ditentukan.
-
-
-\textcolor{red}{Tujuan perlu disinkronkan dengan rumusan masalah. Setiap rumusan masalah boleh memiliki lebih dari 1 tujuan. Berikut ini adalah contoh tujuan dari rumusan masalah "Bagaimanakan memperbaiki efisiensi penghematan energi pada sistem pencahayaan rumah tangga melalui implementasi teknologi kontrol otomatis?"
-\begin{enumerate}
-	\item Memodelkan sistem pencahayaan rumah tangga;
-	\item Mendesain sistem kontrol otomatis untuk sistem pencahayaan rumah tangga.
+	\item \textbf{Clumped cell undercounting:} FCN-based instance segmentation models produce contiguous predictions for densely clustered nuclei, merging adjacent cells and leading to systematic undercounting that compromises both cell counting accuracy and area measurement precision.
+	
+	\item \textbf{Computational inefficiency:} The computational burden of instance segmentation stems largely from costly post-processing required to separate individual instances, rather than the convolutional architecture itself, making real-time analysis impractical in clinical workflows.
+	
+	\item \textbf{Loss of boundary geometry:} Object detection models disregard cell boundary geometry by outputting only bounding boxes, which is insufficient for area-based TILs scoring that requires accurate cell delineation for clinical decision-making.
+	
+	\item \textbf{NMS-based suppression errors:} Methods relying on non-maximum suppression risk undercounting in densely clumped regions by suppressing overlapping predictions, precisely where accurate counting matters most for clinical assessment.
+	
+	\item \textbf{Deployment inaccessibility:} Vision Transformer-based models achieve better cell separation but impose quadratic computational complexity, making them impractical for resource-constrained edge deployment and limiting accessibility to well-funded institutions only.
 \end{enumerate}
-}
 
-\noindent Catatan: Tujuan penelitian dalam skripsi bidang teknik harus jelas, spesifik, terukur, dan dapat dicapai dalam jangka waktu yang ditentukan.
+\section{Objectives}
 
-Berikut ini adalah contoh detail tujuan untuk masing-masing prodi di DTETI:
+To address the identified problems, this thesis has the following objectives:
 
-\newpage
-\vspace{5mm}
-\textbf{Contoh Tujuan Penelitian Skripsi Teknik Elektro:}
-
-\begin{minipage}{0.92\textwidth}
-Berikut adalah beberapa contoh tujuan penelitian yang sesuai dengan rumusan masalah 
-“perbaikan efisiensi penghematan energi pada sistem pencahayaan rumah tangga 
-melalui implementasi teknologi kontrol otomatis”:
-\end{minipage}
-
-
-
-%-------------------------------------------------	
-\noindent\fbox{%
-	\parbox{\textwidth}{%
 \begin{enumerate}
-\item Menganalisis tingkat efisiensi energi pada sistem pencahayaan rumah tangga 
-sebelum dan setelah implementasi teknologi kontrol otomatis.
-\item Mengukur pengurangan biaya listrik setelah implementasi teknologi kontrol 
-otomatis pada sistem pencahayaan rumah tangga.
-\item Menunjukkan bagaimana teknologi kontrol otomatis dapat memperbaiki 
-efisiensi penghematan energi pada sistem pencahayaan rumah tangga.
-\item Meningkatkan kenyamanan dan keamanan pengguna rumah tangga melalui 
-penggunaan teknologi kontrol otomatis pada sistem pencahayaan.
-\item Menjelaskan bagaimana implementasi teknologi kontrol otomatis 
-mempengaruhi kualitas cahaya dan faktor-faktor lain dalam sistem pencahayaan 
-rumah tangga.
-\item Membandingkan efisiensi energi dan biaya pada sistem pencahayaan rumah 
-tangga dengan teknologi kontrol otomatis dan sistem manual.
-\item Menunjukkan implikasi dan rekomendasi dari hasil penelitian bagi rumah tangga 
-dan lingkungan.
+	\item Develop \textbf{RayCastED}, a nuclei detection model that:
+	\begin{itemize}
+		\item preserves cell boundary geometry through a raycast polygon representation (centroid + fixed-angle radial rays), addressing the lack of geometric information in conventional object detection models (Problem 3);
+		\item eliminates costly instance separation post-processing by predicting per-cell polygons directly from a detection head, addressing both the clumped cell separation issue (Problem 1) and the post-processing overhead (Problem 2);
+		\item replaces NMS with a learned end-to-end assignment mechanism, preventing undercounting in densely clumped regions (Problem 4); and
+		\item operates on an FCN backbone to maintain a lightweight computational profile suitable for edge deployment via TensorRT and ONNX Runtime (Problem 5).
+	\end{itemize}
+	\item Evaluate the performance of RayCastED by comparing it against prior nuclei detection and segmentation models on standard benchmarks.
+	\item Evaluate the performance of RayCastED on edge devices.
 \end{enumerate}
-		
-	}%
-}
 
-%-------------------------------------------------	
+\section{Research Scope}
 
-\newpage
-\vspace{5mm}
-\textbf{Contoh Tujuan Penelitian Skripsi Teknik Biomedis:}
-
-\begin{minipage}{0.92\textwidth}
-Berikut adalah beberapa contoh tujuan penelitian untuk penelitian dengan tema "Bagaimana memperbaiki akurasi deteksi kanker payudara dengan menggunakan 
-teknologi pemindaian ultrasonografi berbasis AI":
-\end{minipage}
-
-%-------------------------------------------------	
-\noindent\fbox{%
-	\parbox{\textwidth}{%
-\begin{enumerate}
-\item Mengidentifikasi faktor-faktor yang mempengaruhi akurasi deteksi kanker 
-payudara dengan menggunakan teknologi pemindaian ultrasonografi berbasis 
-AI.
-\item Menilai efektivitas teknologi pemindaian ultrasonografi berbasis AI dalam 
-meningkatkan akurasi deteksi kanker payudara.
-\item Menentukan metode pemindaian ultrasonografi berbasis AI yang paling efektif dalam meningkatkan akurasi deteksi kanker payudara.
-\item Menilai keamanan dan tolerabilitas teknologi pemindaian ultrasonografi berbasis AI dalam deteksi kanker payudara.
-\item Membandingkan akurasi deteksi kanker payudara dengan teknologi pemindaian 
-ultrasonografi berbasis AI dengan metode deteksi lainnya.
-\item Menyediakan bukti ilmiah untuk menunjukkan bahwa teknologi pemindaian 
-ultrasonografi berbasis AI dapat digunakan sebagai metode deteksi kanker 
-payudara yang lebih efektif dan akurat.
-\item Meningkatkan akurasi deteksi kanker payudara dengan menggunakan teknologi 
-pemindaian ultrasonografi berbasis AI.
-\end{enumerate}
-		
-	}%
-}
-
-%-------------------------------------------------	
-
-\newpage
-\vspace{5mm}
-\textbf{Contoh Tujuan Penelitian Skripsi Teknologi Informasi:}
-
-\begin{minipage}{0.92\textwidth}
-Berikut adalah beberapa contoh tujuan penelitian untuk penelitian dengan tema 
-"Bagaimana meningkatkan efisiensi dan keamanan sistem penyimpanan data cloud 
-melalui implementasi teknologi enkripsi kuantum?":
-\end{minipage}
-
-%-------------------------------------------------	
-\noindent\fbox{%
-	\parbox{\textwidth}{%
-\begin{enumerate}
-\item Menilai efektivitas implementasi teknologi enkripsi kuantum dalam 
-meningkatkan keamanan data pada sistem penyimpanan cloud.
-\item Menentukan metode enkripsi kuantum yang paling efektif dalam meningkatkan 
-keamanan data pada sistem penyimpanan cloud.
-\item Membandingkan efisiensi enkripsi kuantum dengan metode enkripsi lainnya 
-dalam meningkatkan keamanan data pada sistem penyimpanan cloud.
-\item Menilai keamanan dan stabilitas sistem penyimpanan data cloud setelah 
-implementasi teknologi enkripsi kuantum.
-\item Menyediakan bukti ilmiah untuk menunjukkan bahwa implementasi teknologi 
-enkripsi kuantum dapat meningkatkan efisiensi dan keamanan sistem 
-penyimpanan data cloud.
-\item Mengidentifikasi potensi masalah dan hambatan dalam implementasi teknologi 
-enkripsi kuantum pada sistem penyimpanan data cloud.
-\end{enumerate}
-		
-	}%
-}
-
-%-------------------------------------------------	
-
-
-\section{Batasan Penelitian}
-
-Batasan penelitian teknik adalah pembatasan atau definisi yang menentukan lingkup dan ruang lingkup suatu penelitian dalam bidang teknik. Ini membantu membatasi masalah dan isu yang akan diteliti, menentukan metode dan teknik penelitian, membatasi populasi dan sampel, dan membatasi variabel dan hipotesis yang akan diuji. Batasan penelitian juga mencakup keterbatasan dan hambatan yang mungkin timbul selama proses penelitian. Tujuan utama dari batasan penelitian teknik adalah membuat penelitian terfokus dan terarah, serta memastikan hasil yang diperoleh dapat digunakan untuk menjawab pertanyaan dan masalah teknik secara efektif dan akurat.
-
-Batasan penelitian dapat ditulis dengan format \textit{list}. Contohnya adalah sebagai berikut:
+This research is bounded by the following scope limitations:
 
 \begin{enumerate}
-	\item Batasan 1.
-	\item Batasan 2.
+	\item \textbf{Data characteristics:} The study uses only H\&E stained histopathology images with approximately 0.25 MPP (microns per pixel) resolution from publicly available secondary datasets. The datasets encompass multiple tissue types/organs.
+	
+	\item \textbf{Computational constraints:} Model evaluation is performed on RTX 5070ti hardware. Baseline comparisons are limited to models compatible with this hardware configuration.
+	
+	\item \textbf{Validation approach:} The research employs computational validation using standard metrics. Pathologist or expert validation is not included in this study.
+	
+	\item \textbf{Technical boundaries:} There are no limitations on nuclei types, sizes, or detection scope. No strict constraints are imposed on input patch sizes or memory usage during model training and inference.
 \end{enumerate}
 
 
@@ -318,6 +130,7 @@ Batasan penelitian dapat ditulis dengan format \textit{list}. Contohnya adalah s
 %%-------------------------------------------------	
 %
 %\newpage
+%
 %\noindent \textbf{Contoh penulisan batasan skripsi Teknologi Informasi:}
 %
 %%-------------------------------------------------	
@@ -341,33 +154,30 @@ Batasan penelitian dapat ditulis dengan format \textit{list}. Contohnya adalah s
 %	}%
 %}
 
-\section{Manfaat Penelitian}
+\section{Research Novelty}
 
-Manfaat penelitian didefinisikan sebagai manfaat yang diperoleh apabila 
-skripsi telah selesai dilakukan. Manfaat skripsi pada umumnya berbentuk daftar. 
-Manfaat penelitian dapat berupa manfaat bagi dunia akademik dan atau masyarakat.
+The novelty of this research lies in the development of RayCastED, which represents the first architecture that combines three key elements: (1) star-convex polygon representation for preserving cell boundary geometry, (2) FCN backbone for maintaining lightweight computational profile, and (3) end-to-end learned assignment mechanism that eliminates NMS dependency. This unique combination addresses the fundamental trade-off between boundary accuracy and computational efficiency in nuclei detection for histopathology images.
+
+\section{Research Contributions}
+
+The contributions of this research are as follows:
 
 \begin{enumerate}
-	\item Enum 1
-	\begin{itemize}
-		\item Coba 1
-		\item Coba 2
-	\end{itemize}
-	\item Enum 2
+	\item \textbf{RayCastED model implementation:} A complete implementation of the proposed polygon-based detection model with raycast representation, integrated into a YOLO-based detection head with end-to-end assignment mechanism.
+	
+	\item \textbf{Performance benchmarks on standard datasets:} Comprehensive evaluation of RayCastED on publicly available histopathology datasets, comparing performance against baseline models including instance segmentation, object detection, and transformer-based approaches.
+	
+	\item \textbf{Edge deployment validation:} Validation of RayCastED's deployment capabilities on edge devices through TensorRT and ONNX Runtime conversion, demonstrating practical feasibility for resource-constrained clinical environments.
+	
+	\item \textbf{Comparison against baseline models:} Systematic comparison with prior nuclei detection and segmentation methods to quantify improvements in accuracy, computational efficiency, and clumped-cell separation performance.
+	
+	\item \textbf{Reproducible codebase:} A publicly available, well-documented implementation that enables reproducibility and provides a foundation for future research in polygon-based detection for computational pathology.
 \end{enumerate}
 
 
 
-\section{Sistematika Penulisan}
+\section{Presentation Structure}
 
 Sistematika penulisan berisi pembahasan apa yang akan ditulis di setiap bab. 
 Sistematika pada umumnya berupa paragraf yang setiap paragraf mencerminkan 
-bahasan setiap Bab. Contoh:
-
-\noindent Bab I membahas tentang pendahuluan yang berisi latar belakang, perumusan masalah 
-dan tujuan penelitian. 
-
-\noindent Bab II berisi tentang metodologi penelitian yang terdiri dari desain penelitian, sumber data, Teknik pengumpulan data dan Teknik analisis data.
-
-\noindent Dan seterusnya.
-
+bahasan setiap Bab. Bagian ini akan ditulis setelah seluruh bab dalam skripsi ini selesai disusun.

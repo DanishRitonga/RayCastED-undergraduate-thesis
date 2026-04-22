@@ -86,6 +86,10 @@
 \usepackage{tikz}
 \usepackage{pgfplots}
 \usepackage{pgf-pie}
+
+\usepackage{microtype}                                          
+\usepackage{hyphenat}                                            
+
 \usetikzlibrary{calc}
 \usetikzlibrary{positioning}
 \usetikzlibrary{arrows}

@@ -1,0 +1,111 @@
+\begin{tikzpicture}
+		% Left: Pure TikZ diagram of star-convex polygon (polar coordinates)
+		\begin{scope}[shift={(-4,0)}]
+			% Concentric grid circles
+			\foreach \r in {0.5, 1.0, 1.5, 2.0} {
+				\draw[gray!30, thin] (0,0) circle (\r);
+			}
+
+			% Radial grid lines every 30 degrees
+			\foreach \a in {0,30,...,330} {
+				\draw[gray!30, thin] (0,0) -- (\a:2.1);
+			}
+
+			% Polar axis labels
+			\draw[->, gray!60] (0,0) -- (2.3,0) node[right, font=\small] {$\theta = 0$};
+			\draw[gray!60, dashed] (0,0) -- (90:2.1) node[above, font=\small] {$\theta = \frac{\pi}{2}$};
+			\draw[gray!60, dashed] (0,0) -- (180:2.1) node[left, font=\small] {$\theta = \pi$};
+			\draw[gray!60, dashed] (0,0) -- (270:2.1) node[below, font=\small] {$\theta = \frac{3\pi}{2}$};
+
+			\coordinate (C) at (0,0);
+			\fill[red] (C) circle (2pt) node[below right, xshift=2pt] {$\mathbf{c}$};
+
+			% Star-convex polygon vertices (12 rays, polar coordinates)
+			\coordinate (P0)  at (  0:1.50);
+			\coordinate (P1)  at ( 30:1.55);
+			\coordinate (P2)  at ( 60:1.45);
+			\coordinate (P3)  at ( 90:1.43);
+			\coordinate (P4)  at (120:1.22);
+			\coordinate (P5)  at (150:1.26);
+			\coordinate (P6)  at (180:1.45);
+			\coordinate (P7)  at (210:1.47);
+			\coordinate (P8)  at (240:1.10);
+			\coordinate (P9)  at (270:1.30);
+			\coordinate (P10) at (300:1.20);
+			\coordinate (P11) at (330:1.40);
+
+			% Filled polygon
+			\fill[blue!15] (P0) -- (P1) -- (P2) -- (P3) -- (P4)
+				-- (P5) -- (P6) -- (P7) -- (P8) -- (P9)
+				-- (P10) -- (P11) -- cycle;
+
+			% Polygon outline
+			\draw[blue!70!black, thick] (P0) -- (P1) -- (P2) -- (P3) -- (P4)
+				-- (P5) -- (P6) -- (P7) -- (P8) -- (P9)
+				-- (P10) -- (P11) -- cycle;
+
+			% Rays from centroid to vertices
+			\foreach \i in {0,...,11} {
+				\draw[red!60, dashed, thin] (C) -- (P\i);
+			}
+
+			% Vertex dots
+			\foreach \i in {0,...,11} {
+				\fill[blue!70!black] (P\i) circle (1.5pt);
+			}
+
+			% Distance label on one ray (d_0 along theta=0)
+			\draw[<->, thick, green!50!black] (0.05, 0) -- node[below, font=\small] {$d_0$} (1.45, 0);
+
+			% Angle arc showing theta_i
+			\draw[->, thick, orange!80!black] (0.6,0) arc (0:30:0.6)
+				node[midway, right, font=\small, xshift=2pt] {$\theta_i$};
+
+		\end{scope}
+
+		% Right: Cell image with TikZ overlay
+		\begin{scope}[shift={(3,0)}]
+			% Include cell image scaled up
+			\node[anchor=south west, inner sep=0] (image) at (-2.75, -2.75)
+				{\includegraphics[width=5.5cm]{contents/chapter-2/fig/cell.png}};
+
+			% Centroid placed at cell center (image is 55px, displayed as 5.5cm)
+			% Centroid at pixel (28,26) → in display coords: (2.8, 2.9)
+			% With anchor south west at (-2.75,-2.75): (2.8-2.75, 2.9-2.75) = (0.05, 0.15)
+			\coordinate (CC) at (0.05, 0.15);
+			\fill[red] (CC) circle (1.5pt);
+
+			% 12 rays using polar coordinates from centroid (TUNE THESE)
+			% Cell diameter ~20px → radius ~10px → ~1.0cm in display
+			% Format: (angle:distance in cm)
+			\coordinate (C0)  at ($(CC) + (  0:1.05)$);
+			\coordinate (C1)  at ($(CC) + ( 30:1.10)$);
+			\coordinate (C2)  at ($(CC) + ( 60:1.05)$);
+			\coordinate (C3)  at ($(CC) + ( 90:0.90)$);
+			\coordinate (C4)  at ($(CC) + (120:0.75)$);
+			\coordinate (C5)  at ($(CC) + (150:1.05)$);
+			\coordinate (C6)  at ($(CC) + (180:1.05)$);
+			\coordinate (C7)  at ($(CC) + (210:1.05)$);
+			\coordinate (C8)  at ($(CC) + (240:0.95)$);
+			\coordinate (C9)  at ($(CC) + (270:1.00)$);
+			\coordinate (C10) at ($(CC) + (300:1.05)$);
+			\coordinate (C11) at ($(CC) + (330:1.10)$);
+
+			% Rays from centroid
+			\foreach \i in {0,...,11} {
+				\draw[->, red!60, dashed, thin] (CC) -- (C\i);
+			}
+
+			% Polygon outline on cell
+			\draw[green!70!black, thick] (C0) -- (C1) -- (C2) -- (C3) -- (C4)
+				-- (C5) -- (C6) -- (C7) -- (C8) -- (C9)
+				-- (C10) -- (C11) -- cycle;
+
+
+			% Vertex dots
+			\foreach \i in {0,...,11} {
+				\fill[green!70!black] (C\i) circle (1.0pt);
+			}
+
+		\end{scope}
+	\end{tikzpicture}
