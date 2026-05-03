@@ -24,20 +24,27 @@ MoNuSAC \cite{verma2021monusac} provides annotated nuclei across multiple organ 
 
 \section{Methods}
 
-Bagian ini membahas metode atau cara yang akan digunakan dalam penelitian, tahapan 
-penerapan metode, dan desain penelitian (misalnya apakah penelitian akan menggunakan 
-eksperimen di Laboratorium atau di lapangan, misalkan saja penelitian biomedis atau 
-penelitian alat ukur hama yang dapat dilakukan di laboratorium ataupun di lapangan, atau menggunakan metode survei (misalnya untuk teknologi Informasi), studi kasus, atau analisis dengan perangkat lunak (ETAP, LTSpice, dst), atau \textit{prototyping} (pembuatan perangkat keras).
+\subsection{Data Preprocessing Pipeline}
+\subsubsection{RayCast Representation Generation}
+\subsubsection{Data Augmentation Strategies}
+\subsubsection{High-level Pipeline Design}
+\subsubsection{Data Ingestion Pipeline}
+\subsubsection{Stain Vectors Estimation and Normalization Methods}
+\subsubsection{Image Size Standardization and Loading}
 
-Bagian ini juga membahas bagaimana data [akan] dianalisis, apakah dengan membandingkan keluaran beberapa alat ukur, membandingkan dengan standar atau bagaimana.
+\subsection{Model Architecture}
+\subsection{Training Strategy, Optimization}
+\subsection{Evaluation Procedure}
+\subsection{Inference Pipeline}
+\subsection{Deployment Architecture}
 
 \section{Research Workflow}
 
-\begin{figure}[htbp]
+\begin{figure}[H]
 	\centering
-	\resizebox{\textwidth}{!}{\input{contents/chapter-3/fig/raycasted}}
-	\caption{YOLO26 architecture.}
-	\label{fig:yolo26}
+	\resizebox{0.95\textwidth}{!}{\input{contents/chapter-3/fig/research-workflow}}
+	\caption{Research workflow diagram illustrating the iterative development process of the RayCastED model, from literature review and data preparation through model development, training, evaluation, and deployment.}
+	\label{fig:research-workflow}
 \end{figure}
 
 Menguraikan prosedur yang akan digunakan dan jadwal atau alur penyelesaian setiap 

@@ -1,0 +1,68 @@
+\begin{tikzpicture}[
+	node distance=1.2cm and 1.6cm,
+	process/.style={rectangle, draw, rounded corners=3pt, fill=blue!8,
+		minimum width=2.6cm, minimum height=0.9cm, align=center, font=\scriptsize},
+	decision/.style={diamond, draw, fill=orange!12, aspect=2.2,
+		minimum width=2.2cm, minimum height=1.1cm, align=center, font=\scriptsize},
+	arrow/.style={->, thick, >=stealth},
+	looparrow/.style={->, thick, >=stealth, dashed},
+	label/.style={font=\tiny, fill=white, inner sep=1pt}
+]
+
+% === TOP ROW: Literature -> Data EDA -> Data fits? -> ETL Design ===
+\node[process] (lit) {Literature\\Review};
+\node[process, right=of lit] (eda) {Data EDA};
+\node[decision, right=of eda] (fits) {Data fits\\requirements?};
+\node[process, right=of fits] (etl) {Data ETL\\Pipeline Design};
+
+% === SECOND ROW: Pipeline Works? + Dev modules ===
+\node[decision, below=1.6cm of etl] (pipe) {Pipeline\\Works?};
+\node[process, left=of pipe] (poly) {Polygon\\Foundation Modules};
+\node[process, left=of poly] (head) {Heads\\Development};
+\node[process, left=of head] (match) {Matcher and Loss\\Development};
+
+% === THIRD ROW: Inference -> Training -> Evaluation ===
+\node[process, below=of match] (inf) {Inference and\\Validation Dev.};
+\node[process, below=of head] (train) {Training};
+\node[process, below=of poly] (eval) {Evaluation};
+\node[decision, right=of eval] (meet) {Evaluation meets\\expectations?};
+
+% === FOURTH ROW: Ablation + Deployment ===
+\node[process, below=1.4cm of meet] (abl) {Ablation\\Trainings};
+\node[process, below=of abl] (deploy) {Deployment};
+\node[process, left=of deploy] (edge) {Evaluation on\\Edge Devices};
+
+% --- Top row arrows ---
+\draw[arrow] (lit) -- (eda);
+\draw[arrow] (eda) -- (fits);
+\draw[arrow] (fits) -- node[label, above] {Yes} (etl);
+
+% --- Validation loop: Data fits? -> No -> back to EDA ---
+\draw[looparrow] (fits.south) -- ++(0,-0.4) -| node[label, pos=0.25, below] {No} (eda.south);
+
+% --- ETL -> Data fits? (Yes branch already drawn) -> Pipeline Works? ---
+\draw[arrow] (etl) -- (pipe);
+
+% --- Validation loop: Pipeline Works? -> No -> back to ETL ---
+\draw[looparrow] (pipe.east) -- ++(0.6,0) |- node[label, pos=0.25, right] {No} (etl.east);
+
+% --- Pipeline Works? -> Yes -> Polygon Foundation ---
+\draw[arrow] (pipe) -- node[label, above] {Yes} (poly);
+
+% --- Dev chain ---
+\draw[arrow] (poly) -- (head);
+\draw[arrow] (head) -- (match);
+\draw[arrow] (match) -- (inf);
+\draw[arrow] (inf) -- (train);
+\draw[arrow] (train) -- (eval);
+\draw[arrow] (eval) -- (meet);
+
+% --- Evaluation loop: No -> Ablation -> back to Training ---
+\draw[looparrow] (meet) -- node[label, right] {No} (abl);
+\draw[looparrow] (abl.west) -- ++(-4.8,0) -| (train.south);
+
+% --- Evaluation loop: Yes -> Deployment -> Edge eval ---
+\draw[arrow] (meet.east) -- ++(0.8,0) |- node[label, pos=0.25, right] {Yes} (deploy.east);
+\draw[arrow] (deploy) -- (edge);
+
+\end{tikzpicture}

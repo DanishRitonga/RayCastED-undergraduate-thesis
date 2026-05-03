@@ -133,77 +133,34 @@ The standard approach to stain normalization involves three steps: (1) estimate 
 
 This process preserves the structural content of the image while standardizing color appearance. Stain normalization is commonly applied as a preprocessing step before training or inference in computational pathology pipelines.
 
+
+\subsection{Segmentation Paradigms}
+
+\subsubsection{Semantic Segmentation}
+
+\subsubsection{Instance Segmentation}
+
+\subsubsection{Limitations of Segmentation for Nuclei Analysis}
+
+\subsection{Detection Paradigms}
+
+\subsubsection{Matching Mechanisms in Object Detection}
+
+\subsubsection{Non-Maximum Suppression}
+
+\subsubsection{Limitations of Detection for Nuclei Analysis}
+
 \subsection{Convolutional Neural Networks}
 
 \subsubsection{Convolution and Feature Extraction}
 
-Convolutional Neural Networks (CNNs) form the backbone of modern computer vision. The fundamental operation in a CNN is the convolution, where a learnable filter $\mathbf{W}$ of size $k \times k$ is slid across the input feature map $\mathbf{X}$ to produce an output feature map $\mathbf{Y}$. For a spatial position $(i, j)$, the convolution output is computed as:
-
-\begin{equation}
-	\mathbf{Y}(i, j) = \sum_{m=0}^{k-1} \sum_{n=0}^{k-1} \mathbf{W}(m, n) \cdot \mathbf{X}(i + m, j + n) + b
-\end{equation}
-
-where $b$ is a learnable bias term. Each convolutional layer applies multiple such filters, producing a set of feature maps that capture local spatial patterns such as edges, textures, and more complex structures. By stacking convolutional layers with nonlinear activation functions (typically ReLU) and pooling layers that reduce spatial dimensions, CNNs learn hierarchical representations ranging from low-level features to high-level semantic concepts.
-
 \subsubsection{Fully Convolutional Networks and Dense Prediction}
 
-Fully Convolutional Networks (FCNs) replace the fully connected layers of traditional CNNs with convolutional layers, enabling dense, per-pixel predictions without requiring fixed-size inputs. Given an input image of size $H \times W$, an FCN produces a spatial output map of size $H' \times W'$ where each spatial location contains a prediction vector. This makes FCNs naturally suited for dense prediction tasks such as semantic segmentation and object detection.
+\subsubsection{Receptive Field and Kernel Size}
 
-The absence of fully connected layers preserves spatial relationships and allows variable input sizes. Critically, for nuclei detection, FCN-based architectures are preferred for edge deployment because their computational complexity scales linearly with the number of input pixels, $O(H \times W)$, unlike transformer-based architectures whose self-attention mechanism scales quadratically, $O((H \times W)^2)$. This difference becomes significant for high-resolution histopathology images.
+\subsubsection{Depthwise Convolution}
 
-\subsubsection{Receptive Fields and Large Kernels}
-
-The receptive field of a neuron in a CNN is the spatial region in the input that influences its output. For a stack of $L$ convolutional layers each with kernel size $k$ and stride 1, the effective receptive field grows linearly with depth. Traditional architectures use small kernels (typically $3 \times 3$) and rely on deep stacking, but this approach suffers from diminishing returns: the effective receptive field grows slower than the theoretical receptive field, and deeper networks become harder to optimize.
-
-Large kernel convolutions (e.g., $31 \times 31$) provide an alternative approach to achieving large receptive fields with fewer layers. LKCell \cite{cui2024lkcell} demonstrated that transferring pre-trained large kernel models to histopathology significantly improves nuclei segmentation accuracy while reducing computational cost. The key insight is that large kernels achieve broad spatial context in a single layer, capturing tissue architecture and cell neighborhood information that is critical for accurate boundary prediction. Using depthwise separable convolutions, the computational overhead of large kernels can be kept manageable, making them practical for efficient FCN-based architectures.
-
-\subsection{Nuclei Detection}
-
-\subsubsection{Detection Paradigms}
-
-Object detection frameworks locate and classify objects within images by producing bounding boxes with associated class labels and confidence scores. Two dominant paradigms exist in the literature.
-
-\textbf{Two-stage detectors}, exemplified by Faster R-CNN \cite{ren2015faster}, first propose candidate regions using a Region Proposal Network (RPN) and then classify and refine each proposal independently. This approach achieves high accuracy but is computationally expensive due to the per-region processing.
-
-\textbf{Single-stage detectors}, exemplified by YOLO \cite{redmon2016yolo}, simultaneously predict bounding boxes and class probabilities across a spatial grid in a single forward pass. This paradigm is significantly faster and more suitable for real-time applications, making it the preferred choice for resource-constrained edge deployment. YOLO divides the input image into an $S \times S$ grid, and each grid cell predicts $B$ bounding boxes with confidence scores and $C$ class probabilities.
-
-Both paradigms output axis-aligned bounding boxes defined by $(x_c, y_c, w, h)$, where $(x_c, y_c)$ is the box center and $(w, h)$ are the width and height. While efficient for localization, this rectangular representation discards all boundary geometry.
-
-\subsubsection{Non-Maximum Suppression}
-
-Non-maximum suppression (NMS) is a post-processing step used by all conventional detection frameworks to eliminate redundant detections. Since detectors typically produce multiple overlapping predictions for a single object, NMS selects the highest-scoring prediction and suppresses all others whose overlap, measured by Intersection over Union (IoU), exceeds a threshold $\theta_{\text{NMS}}$ (typically 0.5). Formally, given a set of detections sorted by confidence score $\{d_1, d_2, \ldots, d_N\}$, NMS iteratively selects the highest-scoring detection $d_i$ and removes all $d_j$ where:
-
-\begin{equation}
-	\text{IoU}(d_i, d_j) > \theta_{\text{NMS}}
-\end{equation}
-
-While effective for isolated objects, NMS is problematic for nuclei detection because densely packed nuclei produce legitimately overlapping predictions. In clumped regions, two adjacent nuclei may have bounding boxes with high IoU, causing NMS to suppress the correct detection of one nucleus. This leads to systematic undercounting in precisely the regions where accurate counting matters most for clinical assessment such as sTILs scoring. The severity of this problem increases with nuclear density, creating an inverse relationship between detection accuracy and the clinical importance of the region.
-
-\subsubsection{Limitations of Detection for Nuclei Analysis}
-
-The bounding box representation has two fundamental limitations for nuclei analysis. First, bounding boxes discard boundary geometry. For sTILs scoring, the clinical standard requires measuring the \textit{area} occupied by lymphocytes, not merely counting their centroids. A bounding box provides only a rough rectangular approximation that significantly overestimates cell area, introducing systematic bias into the sTILs calculation. Second, as described above, NMS-based post-processing undercounts in dense regions. Together, these limitations mean that detection models are insufficient for the area-based measurements required in clinical workflows, despite their computational efficiency.
-
-\subsection{Nuclei Segmentation}
-
-\subsubsection{Instance Segmentation Paradigm}
-
-Instance segmentation combines object detection with pixel-level boundary delineation, producing a separate binary mask for each individual object. This addresses the geometry limitation of detection models by providing accurate per-cell boundaries. The dominant approach in general computer vision is Mask R-CNN \cite{he2017mask}, which extends Faster R-CNN with a mask prediction branch that outputs a binary segmentation mask for each detected region.
-
-In histopathology, U-Net \cite{ronneberger2015u} and its variants have been widely adopted. U-Net uses an encoder-decoder architecture with skip connections that preserve fine-grained spatial information. The encoder extracts features at progressively lower resolutions, while the decoder upsamples these features back to the input resolution. Skip connections concatenate encoder features with decoder features, enabling precise boundary localization.
-
-HoVer-Net \cite{graham2019hover} introduced a specialized approach for nuclei by predicting horizontal and vertical distance maps from each pixel to its nearest nucleus centroid, providing additional discriminative signal for separating touching nuclei during post-processing.
-
-\subsubsection{Limitations of Segmentation for Nuclei Analysis}
-
-Instance segmentation methods face two significant limitations in the context of nuclei analysis.
-
-First, the computational cost is high. Pixel-level mask prediction requires high-resolution feature maps and substantial memory, making these methods impractical for real-time analysis of whole-slide images on resource-constrained hardware. The post-processing step required to convert dense predictions into individual instances (e.g., watershed, connected component analysis) adds further computational overhead.
-
-Second, the clumped cell problem persists. FCN-based segmentation models produce contiguous probability maps, and when nuclei are tightly packed, the predicted masks for adjacent cells merge into a single connected region. Post-processing methods such as watershed can separate some instances, but they frequently fail in regions of high nuclear density where boundary information is ambiguous. This merging leads to systematic undercounting because merged cells are counted as a single instance. Note that this computational burden stems not from the convolutional architecture itself, but from the costly post-processing required to separate individual instances.
-
-\subsection{Polygon-Based Instance Segmentation}
-
-\subsubsection{Star-Convex Polygon Representation}
+\subsection{Star-Convex Object Representation}
 
 \begin{figure}[htbp]
 	\centering
@@ -212,65 +169,41 @@ Second, the clumped cell problem persists. FCN-based segmentation models produce
 	\label{fig:star-convex}
 \end{figure}
 
-Star-convex polygons offer a compact parametric representation of cell boundaries that bridges the gap between detection efficiency and segmentation accuracy. A star-convex polygon is defined by a center point $\mathbf{c} = (c_x, c_y)$ and a set of $n$ radial distances $\{d_1, d_2, \ldots, d_n\}$ measured at fixed angular intervals $\theta_i = \frac{2\pi i}{n}$ for $i = 0, 1, \ldots, n-1$. The polygon boundary is reconstructed as:
+\subsubsection{Polar IoU Loss Function}
 
-\begin{equation}
-	\mathbf{p}_i = \mathbf{c} + d_i \cdot [\cos\theta_i, \sin\theta_i]^T
-\end{equation}
+\subsubsection{Polar Centerness}
 
-
-StarDist \cite{schmidt2018cell} introduced this representation for cell detection in fluorescence microscopy, later extended to histopathology images \cite{weigert2022stardist}. The representation is efficient because it parameterizes the entire boundary with $n + 2$ values (center coordinates plus $n$ distances), compared to the thousands of pixels required for a segmentation mask. However, StarDist operates within a dense prediction framework followed by NMS-based post-processing, inheriting the undercounting problem in clumped regions.
-
-\subsubsection{PolarMask: Polar IoU and Centerness}
-
-PolarMask \cite{xie2020polarmask} integrated the polar polygon representation into a single-shot detection framework, eliminating the need for a separate dense prediction stage. PolarMask formulates instance segmentation as two simultaneous tasks: (1) center point classification, predicting whether each spatial location is an object center, and (2) dense distance regression, predicting $n$ radial distances at each positive center location.
-
-PolarMask introduced two key innovations. The \textbf{PolarIoU loss} directly optimizes the overlap between the predicted and ground truth polygons by computing IoU in polar coordinates, providing a more geometrically meaningful supervision signal than individual distance regression losses. The \textbf{centerness branch} predicts a scalar value for each spatial location indicating how close it is to the true object center, defined as:
-
-\begin{equation}
-	\text{centerness} = \sqrt{\frac{\min(l^*, r^*)}{\max(l^*, r^*)} \times \frac{\min(t^*, b^*)}{\max(t^*, b^*)}}
-\end{equation}
-
-where $l^*, r^*, t^*, b^*$ are the distances from the location to the left, right, top, and bottom boundaries of the object. This down-weights predictions from locations far from the true center, reducing low-quality detections and improving overall accuracy.
-
-\subsubsection{Boundary Refinement (CPP-Net)}
-
-CPP-Net \cite{chen2023cppnet} identified that predicting radial distances from a single centroid pixel provides insufficient contextual information for robust boundary prediction. To address this, CPP-Net samples a \textit{point set} rather than one single pixel within each cell for distance prediction, substantially enhancing the contextual information available to the model.
-
-The predictions from the sampled point set are adaptively fused using a \textbf{Confidence-based Weighting Module} that learns to assign higher weights to predictions from more informative sampling locations. Additionally, CPP-Net introduced a \textbf{Shape-Aware Perceptual (SAP) loss} that constrains the shape of predicted polygons by comparing them against a reference representation through a pre-trained auxiliary network. Despite these improvements, CPP-Net still operates within a dense prediction framework with NMS-based post-processing, inheriting the same limitations regarding clumped cell separation.
+\subsubsection{Boundary Refinement}
 
 \subsection{End-to-End Detection with Bipartite Matching}
 
-\subsubsection{Set Prediction and the Hungarian Algorithm}
+\subsubsection{Bipartite Matching: Hungarian Algorithm and LSP-DETR}
 
-The DETR (DEtection TRansformer) framework introduced a paradigm shift by replacing hand-designed components such as anchor boxes and NMS with a set prediction approach. DETR formulates detection as a bipartite matching problem between a fixed-size set of $N$ predictions $\hat{\mathcal{Y}} = \{\hat{y}_1, \ldots, \hat{y}_N\}$ and ground truth objects $\mathcal{Y} = \{y_1, \ldots, y_M\}$ (with $N \geq M$, padded with $\emptyset$ for the ``no object'' class).
+\subsubsection{Task-Aligned Matching and the YOLO26 Architecture}
 
-The optimal assignment $\sigma^*$ is found by solving:
+\begin{figure}[H]
+	\centering
+	\input{contents/chapter-2/fig/YOLO26}
+	\caption{YOLO26 architecture.}
+	\label{fig:yolo26}
+\end{figure}
 
-\begin{equation}
-	\sigma^* = \arg\min_{\sigma \in \Pi_N} \sum_{i=1}^{N} \mathcal{L}_{\text{match}}(y_i, \hat{y}_{\sigma(i)})
-\end{equation}
+\subsection{Discrete Wavelet Transform}
 
-where $\Pi_N$ is the set of all permutations of $N$ elements, and $\mathcal{L}_{\text{match}}$ is a pairwise matching cost that typically combines classification loss, bounding box $\ell_1$ loss, and IoU loss. This optimization is solved exactly using the Hungarian algorithm in $O(N^3)$ time. Once the optimal assignment is found, the model is trained end-to-end with a Hungarian loss computed only on matched pairs:
+\subsubsection{Wavelet Decomposition Fundamentals}
 
-\begin{equation}
-	\mathcal{L}_{\text{Hungarian}} = \sum_{i=1}^{N} \mathcal{L}(y_i, \hat{y}_{\sigma^*(i)})
-\end{equation}
+\subsubsection{Wavelet-Based Downsampling in CNNs}
 
-This formulation ensures that each ground truth object is matched to exactly one prediction, eliminating the need for NMS entirely. The key advantage for nuclei detection is that overlapping predictions are no longer suppressed; instead, the learned assignment naturally resolves which prediction corresponds to which nucleus.
+\subsection{Evaluation Metrics}
 
-\subsubsection{LSP-DETR: Star-Convex Polygons with Learned Assignment}
+\subsubsection{Dice Coefficient and F1 Score}
 
-LSP-DETR \cite{pekar2026lsp} adapted the end-to-end detection framework to nuclei segmentation by combining bipartite matching with star-convex polygon representation. Each prediction consists of a class label, bounding box coordinates, and a set of radial distances defining a star-convex polygon boundary. The matching cost and training loss are extended to include a radial distance term that measures the accuracy of the predicted polygon shape.
+\subsubsection{Mean Average Precision (mAP)}
 
-The Hungarian matching assigns each ground truth nucleus to exactly one prediction, and the model is trained end-to-end with a combined loss that includes classification, bounding box, and polygon distance terms. This eliminates NMS entirely, resolving the undercounting problem in clumped regions: star-convex polygons naturally overlap in dense areas without being suppressed, enabling accurate instance separation.
+\subsubsection{Panoptic Quality (PQ)}
 
-LSP-DETR demonstrated strong generalization across tissue types and was over five times faster than the next-fastest leading method. However, its transformer-based backbone imposes quadratic computational complexity, making it demanding for edge deployment. RayCastED adopts LSP-DETR's assignment mechanism and polygon representation while replacing the transformer backbone with an FCN, preserving the benefits of end-to-end matching with reduced computational cost suitable for resource-constrained environments.
+\subsubsection{Aggregated Jaccard Index (AJI)}
 
-\section{Analisis Perbandingan Metode}
+\section{Comparative Method Analysis}
 
-Di dalam tinjauan pustaka hasil akhirnya adalah analisis secara kualitatif atau pun secara kuantitatif kelebihan dan kekurangan metode jika dikaitkan dengan masalah, batasan-batasan masalah dan solusi yang dinginkan. Analisis kuantitatif tidak wajib teapi mempunyai nilai tambah di dalam tugas akhir saudara. Bagian ini menjelaskan kenapa metode tersebut dipilih dan uraikan dengan lebih jelas metode pelaksanaan tugas akhir yang ingin Anda lakukan. 
-
-\section{Pertanyaan Tugas Akhir (Jika Perlu)}
-
-Pertanyaan tugas akhir bersifat opsional dan dapat ditambahkan untuk menekankan hal-hal yang hendak diketahui dari tugas akhir berdasar pada tujuan tugas akhir. Pertanyaan tugas akhir dikenal dengan RQ (\textit{Research Question}) dan harus memiliki keterkaitan dengan RO (\textit{Research Objective}). Satu RO dapat memiliki satu atau lebih dari satu RQ. 
+\section{Research Questions (If Needed)}
