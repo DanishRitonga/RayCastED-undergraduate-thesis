@@ -2,49 +2,316 @@
 
 \section{Datasets}
 
-This study uses publicly available secondary datasets for training and evaluation. Table~\ref{tab:datasets} summarizes the datasets and their roles.
+This study used publicly available secondary datasets for training and evaluation. Table~\ref{tab:datasets} summarized the datasets and their roles.
 
 \input{contents/chapter-3/tab/data}
 
 \subsection{PanNuke}
 
-PanNuke \cite{gamper2019pannuke, gamper2020pannuke} is a large-scale pan-cancer nucleus instance segmentation dataset containing approximately 189,744 labeled nuclei across 19 tissue types. Each nucleus is annotated with an instance mask and one of five nuclear categories. The dataset is provided as pickled bytes containing image patches and corresponding label masks. In this study, PanNuke serves as the primary benchmarking dataset for evaluating nuclei detection and segmentation performance.
+PanNuke \cite{gamper2019pannuke, gamper2020pannuke} is a large-scale pan-cancer nucleus instance segmentation dataset containing approximately 189,744 labeled nuclei across 19 tissue types. Each nucleus is annotated with an instance mask and one of five nuclear categories. The dataset is provided as pickled bytes containing image patches and corresponding label masks. In this study, PanNuke served as the primary benchmarking dataset for evaluating nuclei detection and segmentation performance.
 
 \subsection{PUMA}
 
-PUMA (Melanoma Histopathology Dataset with Tissue and Nuclei Annotations) \cite{schuiveling2025puma} provides annotated histopathology images for TILs detection in melanoma tissue. The dataset is distributed as TIFF images paired with GeoJSON annotation files containing polygon-level cell boundary annotations. This dataset is used to evaluate RayCastED's ability to detect and delineate TILs in a clinically relevant setting.
+PUMA (Melanoma Histopathology Dataset with Tissue and Nuclei Annotations) \cite{schuiveling2025puma} provides annotated histopathology images for TILs detection in melanoma tissue. The dataset is distributed as TIFF images paired with GeoJSON annotation files containing polygon-level cell boundary annotations. This dataset was used to evaluate RayCastED's ability to detect and delineate TILs in a clinically relevant setting.
 
 \subsection{panopTILs}
 
-panopTILs \cite{liu2022panoptils} provides TILs annotations on breast cancer histopathology images. The dataset is distributed as PNG image patches with corresponding annotation files. This dataset supplements the TILs evaluation alongside PUMA, providing breast tissue samples for assessing TILs detection performance across cancer types.
+panopTILs \cite{liu2022panoptils} provides TILs annotations on breast cancer histopathology images. The dataset is distributed as PNG image patches with corresponding annotation files. This dataset supplemented the TILs evaluation alongside PUMA, providing breast tissue samples for assessing TILs detection performance across cancer types.
 
 \subsection{MoNuSAC}
 
-MoNuSAC \cite{verma2021monusac} provides annotated nuclei across multiple organ types with four nuclear categories: epithelial, lymphocyte, neutrophil, and macrophage. The dataset is provided as pickled bytes. The lymphocyte annotations in MoNuSAC are particularly relevant for evaluating TILs detection, as lymphocytes are the primary cell type of interest in TILs scoring.
+MoNuSAC \cite{verma2021monusac} provides annotated nuclei across multiple organ types with four nuclear categories: epithelial, lymphocyte, neutrophil, and macrophage. The dataset is provided as pickled bytes. The lymphocyte annotations in MoNuSAC were particularly relevant for evaluating TILs detection, as lymphocytes are the primary cell type of interest in TILs scoring.
 
 \section{Methods}
 
 \subsection{Data Preprocessing Pipeline}
+
+\begin{figure}[H]
+	\centering
+	\resizebox{0.95\textwidth}{!}{\input{contents/chapter-3/fig/data-preprocessing}}
+	\caption{High-level Pipeline Design}
+	\label{fig:data-preprocessing}
+\end{figure}
+
 \subsubsection{RayCast Representation Generation}
-\subsubsection{High-level Pipeline Design}
-\subsubsection{Data Ingestion Pipeline}
-\subsubsection{Stain Vectors Estimation and Normalization Methods}
-\subsubsection{Image Size Standardization and Loading}
+
+Given a closed polygon $\mathcal{P}$ defined by an ordered set of $K$ vertices $\{\mathbf{v}_j\}_{j=0}^{K-1}$ in $\mathbb{R}^2$ and a class label $c$, the RayCast representation encodes the polygon as a fixed-length vector by expressing its boundary as radial distances from a chosen centroid along $R$ uniformly spaced angular directions. The output is an annotation vector:
+
+\begin{equation}
+    \mathbf{a} = \left(c,\; \hat{x},\; \hat{y},\; d_0,\; d_1,\; \ldots,\; d_{R-1}\right)^\top \in \mathbb{R}^{3+R}
+\end{equation}
+
+where $(\hat{x}, \hat{y})$ is the centroid, $R$ is the number of rays (set to 32 in this study, and constrained to be a multiple of 4), and $d_r$ records the Euclidean distance from the centroid to the polygon boundary along ray $r$ at angle $\theta_r = r \cdot 2\pi / R$. The convention is $\theta_0 = 0$ (east, $+X$ axis), increasing counter-clockwise. Figure~\ref{fig:raycast-generation} illustrates the concept.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.55\textwidth}{!}{\input{contents/chapter-3/fig/raycast-generation}}
+    \caption{RayCast representation of a cell polygon. From the area-weighted centroid $\mathbf{p}$, $R=32$ rays are cast at uniformly spaced angles. Each distance $d_r$ records the nearest boundary intersection along ray $r$.}
+    \label{fig:raycast-generation}
+\end{figure}
+
+The generation algorithm proceeds in four stages: (1) centroid computation, (2) containment verification and exterior centroid correction, (3) ray--edge intersection solving, and (4) nearest-hit selection and output assembly. The entire pipeline is formulated as batched tensor operations for GPU parallelism, processing all polygons in a region of interest simultaneously.
+
+\paragraph{Raster Mask to Contour Extraction.}
+Datasets such as PanNuke and MoNuSAC provide per-cell binary raster masks rather than polygon coordinates. For each cell, the binary mask is decoded and contour vertices are extracted via Moore-neighbor tracing (OpenCV's \texttt{findContours} with \texttt{CHAIN\_APPROX\_NONE}) to preserve full boundary fidelity. When a mask produces multiple contours, only the contour with the largest enclosed area is retained. Contours with fewer than 3 vertices are discarded.
+
+\paragraph{Centroid Computation.}
+The area-weighted centroid serves as the origin from which all rays emanate. Given the polygon vertices with cyclic indexing $\mathbf{v}_K \equiv \mathbf{v}_0$, the signed area is computed via the shoelace formula:
+
+\begin{equation}
+    A = \frac{1}{2} \sum_{j=0}^{K-1} \left( x_j \, y_{j+1} - x_{j+1} \, y_j \right)
+\end{equation}
+
+Polygons with $|A| < \varepsilon$ (where $\varepsilon = 10^{-12}$) are rejected as degenerate. The area-weighted centroid coordinates are:
+
+\begin{equation}
+    \hat{x} = \frac{1}{6A} \sum_{j=0}^{K-1} (x_j + x_{j+1})\left( x_j \, y_{j+1} - x_{j+1} \, y_j \right)
+\end{equation}
+\begin{equation}
+    \hat{y} = \frac{1}{6A} \sum_{j=0}^{K-1} (y_j + y_{j+1})\left( x_j \, y_{j+1} - x_{j+1} \, y_j \right)
+\end{equation}
+
+For GPU-batched processing across $N$ polygons padded to $K_{\max} = \max_i K_i$ vertices, an edge mask $\mathbf{M}^{\text{edge}} \in \{0,1\}^{N \times K_{\max}}$ distinguishes real polygon edges from padding artifacts (the closing edge $j = K_i - 1$ is included). The cross-product, area, and centroid are computed element-wise and reduced over the vertex dimension in a single kernel launch.
+
+\paragraph{Containment Verification and Exterior Centroid Correction.}
+For convex polygons the area-weighted centroid always lies inside the boundary. For the mildly concave nuclei encountered in histopathology, it may fall outside. A crossing-number point-in-polygon test is applied: a horizontal ray is cast in the $+X$ direction, and the number of edge crossings determines interiority (odd crossings = inside).
+
+When the centroid falls outside the polygon, a binary search positions it at an interior point. The target $\mathbf{t}$ is the mean of the three real vertices closest to the exterior centroid in Euclidean distance:
+
+\begin{equation}
+    \mathbf{t} = \frac{1}{3}\left(\mathbf{v}_{j_1} + \mathbf{v}_{j_2} + \mathbf{v}_{j_3}\right)
+\end{equation}
+
+The algorithm probes the line segment $[\mathbf{p},\, \mathbf{t}]$ at fractions $\alpha \in \{0.5,\, 0.75,\, 0.875,\, 0.9375,\, 0.96875\}$, testing each candidate $\mathbf{q}_\alpha = \mathbf{p} + \alpha (\mathbf{t} - \mathbf{p})$ for interiority via the crossing-number test. The first interior point found is used. In practice, histopathology nuclei exhibit at most mild concavity, so the area-weighted centroid is interior in nearly all cases and the fallback is rarely triggered.
+
+\paragraph{Ray--Edge Intersection.}
+The core computation solves for the intersection of each ray with every polygon edge. The ray from centroid $\mathbf{p}$ in unit direction $\mathbf{d}_r = (\cos\theta_r,\; \sin\theta_r)^\top$ is parameterized as:
+
+\begin{equation}
+    \mathbf{L}_r(t) = \mathbf{p} + t \, \mathbf{d}_r, \quad t \geq 0
+\end{equation}
+
+An edge segment from $\mathbf{v}_j$ to $\mathbf{v}_{j+1}$ with edge vector $\mathbf{e}_j = \mathbf{v}_{j+1} - \mathbf{v}_j$ is:
+
+\begin{equation}
+    \mathbf{Q}_j(s) = \mathbf{v}_j + s \, \mathbf{e}_j, \quad s \in [0, 1]
+\end{equation}
+
+Setting $\mathbf{L}_r(t) = \mathbf{Q}_j(s)$ and defining the offset $\mathbf{f}_j = \mathbf{v}_j - \mathbf{p}$ yields a $2 \times 2$ linear system:
+
+\begin{equation}
+    \underbrace{\begin{bmatrix} \cos\theta_r & -e_{j,x} \\ \sin\theta_r & -e_{j,y} \end{bmatrix}}_{\mathbf{M}_{rj}}
+    \begin{bmatrix} t \\ s \end{bmatrix}
+    = \underbrace{\begin{bmatrix} f_{j,x} \\ f_{j,y} \end{bmatrix}}_{\mathbf{b}_j}
+\end{equation}
+
+The system is solved via Cramer's rule using the 2D cross product $\mathbf{a} \times \mathbf{b} = a_x b_y - a_y b_x$:
+
+\begin{equation}
+    \Delta_{rj} = \det(\mathbf{M}_{rj}) = -\cos\theta_r \cdot e_{j,y} + \sin\theta_r \cdot e_{j,x}
+\end{equation}
+\begin{equation}
+    t_{rj} = \frac{-\mathbf{f}_j \times \mathbf{e}_j}{\Delta_{rj}}, \qquad
+    s_{rj} = \frac{\mathbf{d}_r \times \mathbf{f}_j}{\Delta_{rj}}
+\end{equation}
+
+The right-hand side $\mathbf{b}_j$ is independent of the ray direction; only the first column of $\mathbf{M}_{rj}$ varies with $r$. Each $(r,j)$ pair is solved independently, enabling full data-parallelism over all three dimensions (polygon, ray, edge) simultaneously.
+
+\paragraph{Validity Filtering and Nearest-Hit Selection.}
+An intersection is valid if and only if: (1) $|\Delta_{rj}| > \varepsilon_d$ (ray is not parallel to the edge, $\varepsilon_d = 10^{-10}$), (2) $t_{rj} > \varepsilon_t$ (intersection lies in front of the centroid, $\varepsilon_t = 10^{-6}$), (3) $0 \leq s_{rj} \leq 1$ (intersection falls on the edge segment), and (4) the edge is a real polygon edge (not a padding artifact). Degenerate cases are handled as follows:
+
+\begin{itemize}
+    \item \textbf{Ray through shared vertex:} both adjacent edges produce valid hits with the same $t$; the minimum selection naturally resolves this.
+    \item \textbf{Ray tangent to edge:} filtered by the determinant threshold $|\Delta_{rj}| < \varepsilon_d$.
+    \item \textbf{Ray parallel but offset:} produces $t \to \pm\infty$, filtered by the $t > \varepsilon_t$ condition.
+    \item \textbf{Ray collinear with edge:} the edge lies along the ray direction; $d_r$ is conservatively set to $d_r = 0$.
+\end{itemize}
+
+For each ray $r$, the boundary distance is the minimum positive $t$ among valid intersections:
+
+\begin{equation}
+    d_r = \min_{j \in \mathcal{V}_r} t_{rj}, \qquad \mathcal{V}_r = \{j : \text{valid}_{rj} = \text{True}\}
+\end{equation}
+
+Rays with no valid intersection ($\mathcal{V}_r = \emptyset$) are assigned $d_r = 0$, following the convention that zero distance indicates a missed ray.
+
+\paragraph{Batched GPU Implementation.}
+The entire pipeline is implemented as vectorized tensor operations in PyTorch, processing all $N$ polygons in a region of interest simultaneously on GPU. Polygons are padded to $K_{\max}$ vertices by repeating the last vertex; past the real vertex count, the padding creates degenerate zero-length edges that naturally fail the determinant check and are excluded from results.
+
+The core intersection solve operates over the full $(N, R, K_{\max})$ tensor. Input shapes are broadcast as follows: vertex coordinates $(N, 1, K_{\max})$, centroid $(N, 1, 1)$, ray trig functions $(1, R, 1)$, expanding element-wise to $(N, R, K_{\max})$. All Cramer's rule computations, validity masking, and the final $\min$-reduction over the edge dimension execute in a single kernel launch without explicit loops.
+
+The computational work scales as $O(N \cdot R \cdot K_{\max})$. The only serial component is the exterior centroid fallback (5 binary search iterations), which operates on a negligible fraction of the batch since histopathology nuclei rarely produce exterior centroids. For a typical region of interest ($N \approx 1000$, $R = 32$, $K_{\max} \approx 500$), the intersection tensors require approximately $4 \cdot N \cdot R \cdot K_{\max} \approx 64\text{MB}$ each, well within modern GPU memory.
+
+\paragraph{Inverse Decoding.}
+The raycast representation decodes back to a polygon by reconstructing vertex positions from the centroid and radial distances:
+
+\begin{equation}
+    \mathbf{v}_r = \mathbf{p} + d_r \cdot \mathbf{d}_r, \qquad r = 0, \ldots, R-1
+\end{equation}
+
+connected cyclically. In batched form for $N$ annotations with distance matrix $\mathbf{D} \in \mathbb{R}^{N \times R}$ and precomputed direction vectors $\mathbf{c} = (\cos\theta_0, \ldots, \cos\theta_{R-1})$ and $\mathbf{s} = (\sin\theta_0, \ldots, \sin\theta_{R-1})$:
+
+\begin{equation}
+    \mathbf{V}_x = \hat{\mathbf{x}}[:, \text{None}] + \mathbf{D} \odot \mathbf{c}^\top, \qquad
+    \mathbf{V}_y = \hat{\mathbf{y}}[:, \text{None}] + \mathbf{D} \odot \mathbf{s}^\top
+\end{equation}
+
+yielding vertex coordinates $\mathbf{V} \in \mathbb{R}^{N \times R \times 2}$. The angular constants are precomputed once and shared across ingestion, model inference, loss computation, and evaluation.
+
+\subsubsection{Data Ingestion Design}
+
+\begin{figure}[H]
+	\centering
+	\resizebox{0.7\textwidth}{!}{\input{contents/chapter-3/fig/Ingestor-UML}}
+	\caption{UML class diagram of the modular ingestion pipeline. \texttt{BaseDataIngestor} defines the shared infrastructure; concrete ingestors implement format-specific \texttt{process\_item} logic; all converge on the unified raycast annotation format via \texttt{RayCastGPU}.}
+	\label{fig:ingestor-uml}
+\end{figure}
+
+A practical computational pathology system must ingest annotations from heterogeneous source formats: binary instance masks, polygon coordinates, comma-separated coordinate strings, and integer label maps. Rather than implementing a monolithic converter per dataset, the ingestion pipeline follows a modular architecture with three design principles.
+
+First, \textbf{format-agnostic core logic} (centroid computation, ray--edge intersection solving, MPP harmonization, and label translation) is shared across all ingestors. Second, each concrete ingestor implements only the \textbf{format-specific extraction} logic that parses its source format into the common intermediate representation: polygon vertex arrays with class labels. Third, \textbf{configuration-driven routing} specifies the choice of ingestor, split strategy, modality pairing, and label mapping declaratively, without code changes.
+
+The architecture is built around an abstract base class that defines the contract every ingestor must fulfill: for each region of interest, produce a unified output $(id_{\text{roi}}, \mathbf{I}, \mathbf{A}, t_{\text{tissue}})$ consisting of an identifier, an RGB image, a raycast annotation matrix $\mathbf{A} \in \mathbb{R}^{N \times (3+R)}$, and a tissue provenance label. The sole abstract method is \texttt{process\_item}, which each concrete ingestor implements for its specific format.
+
+The base class provides a template method for \textbf{registry construction} in three phases: (1) file discovery and pairing, where image files are matched with annotation files using either bundled-archive (same file) or physical-parallel (paired directories) strategies; (2) split assignment, where each pair is assigned to train/val/test using physical subdirectory names, filename regex patterns, or stratified random sampling by tissue type; and (3) registry assembly into a work queue. A \textbf{two-step label translation} decouples source vocabularies from the global integer encoding: a namespace map $\mathcal{N}$ translates raw labels to standardized strings shared across all datasets, and a global cell map $\mathcal{G}$ maps standardized strings to integer class IDs. Adding a new dataset requires only a new namespace map. Similarly, all annotations are rescaled to a common target microns-per-pixel via \textbf{MPP harmonization}, scaling image dimensions and annotation coordinates uniformly by the ratio $\rho = \sigma_{\text{native}} / \sigma_{\text{target}}$.
+
+Concrete ingestors differ only in how they extract polygon vertices: mask-based sources decode compressed byte strings via Moore-neighbor contour tracing, while vector-based sources read polygon coordinates directly from geometry arrays or comma-separated coordinate strings requiring no rasterization. Mask-based ingestors process ROIs in parallel using a process pool, deferring GPU ray-cast conversion to the main process to avoid CUDA cross-process deadlock. All ingestors converge through a single conversion entry point, \texttt{RayCastGPU.batch\_polygon\_to\_raycast}, which receives the format-independent intermediate representation (variable-length vertex arrays and class labels) and produces the unified raycast annotation $\mathbf{A}$.
+
+The \texttt{IngestionOrchestrator} governs the end-to-end process: a string-keyed registry maps configuration keys to concrete ingestor classes, validated at both config-load time and runtime. A two-layer YAML hierarchy (global defaults overridden per dataset) enables declarative specification of all parameters. Row-level errors are caught and logged without terminating the remaining dataset, so a single corrupt ROI does not halt ingestion. This separation of concerns means that adding a new dataset typically requires only a YAML configuration entry with a namespace map and format key, while the computational core remains invariant across all sources.
+
+\subsubsection{Stain Vector Estimation and Normalization}
+
+Histopathology images exhibit substantial color variation across scanners, staining batches, and laboratories. A model trained on darkly-stained slides may perform poorly on lightly-stained ones. The transform pipeline addresses this through a three-phase process. First, images are chopped into $S \times S$ tiles. Second, the Macenko method \cite{macenko2009} estimates per-tile stain vectors across the entire corpus, and these are aggregated into a population-level profile. Third, every tile is normalized against this profile and padded to a uniform size.
+
+\paragraph{Population-Level Stain Vector Estimation.}
+For each tile in the training corpus, the Macenko method \cite{macenko2009} estimates a per-tile stain matrix $\mathbf{M}_{\text{stain}}^{(k)} \in \mathbb{R}^{2 \times 3}$ and maximum concentrations $\mathbf{c}_{\max}^{(k)} \in \mathbb{R}^2$. The GPU-accelerated variant uses PyTorch with float64 precision throughout, falling back to NumPy when CUDA is unavailable; both paths produce numerically identical results.
+
+The population profile is then aggregated across all $K$ valid tiles following Agraz et al. \cite{agraz2023robust}: the stain matrix is averaged since stain directions vary smoothly, while maximum concentrations use the 99th percentile to establish a robust upper bound:
+
+\begin{equation}
+    \overline{\mathbf{M}} = \frac{1}{K} \sum_{k=1}^{K} \mathbf{M}_{\text{stain}}^{(k)}, \qquad
+    \mathbf{c}^*_{\max} = P_{99}\!\left(\{\mathbf{c}_{\max}^{(k)}\}_{k=1}^{K}\right)
+\end{equation}
+
+Tiles that fail estimation (all-white or fewer than 100 tissue pixels) are silently excluded. The profile is serialized as JSON for reuse during normalization and at inference time.
+
+\paragraph{Per-Tile Stain Normalization.}
+Given the population target $(\overline{\mathbf{M}}, \mathbf{c}^*_{\max})$ and a per-tile source estimate $(\mathbf{M}_{\text{source}}, \mathbf{c}_{\text{source}})$, normalization proceeds by decomposing the tile into its source stain concentrations, rescaling those concentrations to match the population intensity range, and reconstructing the image using the population mean stain directions. Formally:
+
+\begin{align}
+    \text{OD} &= -\log_{10}\!\left(\frac{I_0 + 1}{I_o}\right) \\
+    \mathbf{C}_{\text{source}} &= \text{OD} \cdot \mathbf{M}_{\text{source}}^+ \\
+    \mathbf{C}_{\text{norm}} &= \mathbf{C}_{\text{source}} \odot \frac{\mathbf{c}^*_{\max}}{\mathbf{c}_{\text{source}}} \\
+    \text{OD}_{\text{norm}} &= \mathbf{C}_{\text{norm}} \cdot \overline{\mathbf{M}} \\
+    I_{\text{norm}} &= I_o \cdot 10^{-\text{OD}_{\text{norm}}} - 1
+\end{align}
+
+Equation~(1) converts the tile to optical density space. Equation~(2) decomposes the OD image into Hematoxylin and Eosin stain concentrations via the pseudoinverse of the source stain matrix. Equation~(3) scales each channel's concentration to match the population's 99th percentile intensity. Equation~(4) reconstructs the OD using the population mean stain directions, replacing the source-specific color signature with the standardized one. Equation~(5) converts back to RGB. The final image is clipped to $[0, 255]$.
+
+\subsubsection{Image Size Standardization}
+
+Every ingested image must be reduced to a fixed $S \times S$ canvas (defaulting to 256$\times$256 pixels) suitable for batched GPU training. Two operations handle the two possible regimes: images larger than $S$ in either dimension are \textbf{chopped} into overlapping tiles; images smaller than or equal to $S$ are \textbf{padded} with white pixels at the bottom and right edges.
+
+\paragraph{Chopping: Dynamic Overlap Distribution.}
+For an image dimension $L > S$ with minimum overlap fraction $\alpha_{\text{overlap}}$, the number of tiles $n$ is computed from the effective stride $\sigma = S - \lfloor S \cdot \alpha_{\text{overlap}} \rfloor$. Tile starting positions are distributed uniformly via $\text{linspace}(0, L - S, n)$, which distributes any excess overlap evenly across all seams rather than concentrating it at the boundary.
+
+\paragraph{Annotation-Aware Raycast Splitting.}
+Each cell is assigned to exactly one tile via a centroid-owns-cell policy: a cell belongs to the tile containing its centroid $(\hat{x}, \hat{y})$. The splitting procedure has four steps. First, centroids are filtered to retain only cells within the tile bounds. Second, centroid coordinates are shifted to crop-relative space: $\hat{x}' = \hat{x} - x_0$, $\hat{y}' = \hat{y} - y_0$. Third, for each of the $R$ rays, the distance to each of the four tile boundaries is computed. For a ray in direction $\mathbf{d}_r = (\cos\theta_r, \sin\theta_r)$, the boundary distances are:
+
+\begin{equation}
+    d_{\text{right}} = \frac{w - \hat{x}'}{\cos\theta_r},\quad
+    d_{\text{left}}  = \frac{-\hat{x}'}{\cos\theta_r},\quad
+    d_{\text{bottom}} = \frac{h - \hat{y}'}{\sin\theta_r},\quad
+    d_{\text{top}}    = \frac{-\hat{y}'}{\sin\theta_r}
+\end{equation}
+
+where terms with $|\cos\theta_r| \leq \varepsilon$ or $|\sin\theta_r| \leq \varepsilon$ are set to $+\infty$ (the ray is parallel to that boundary). The maximum permissible distance is $d_{\max} = \min(d_{\text{right}}, d_{\text{left}}, d_{\text{bottom}}, d_{\text{top}})$, and each ray is clipped: $d_r' = \min(d_r, d_{\max})$. Fourth, cells that lose too many rays to boundary clipping are discarded via a survival rate filter:
+
+\begin{equation}
+    \frac{|\{r : d_r' > 0\}|}{R} \geq \tau_{\text{survival}}
+\end{equation}
+
+where $\tau_{\text{survival}} = 0.5$. This prevents heavily truncated cells with unreliable shape representations from entering the training data. Figure~\ref{fig:annotation-splitting} illustrates the centroid-owns-cell policy and ray clipping procedure.
+
+\begin{figure}[H]
+    \centering
+    \resizebox{0.95\textwidth}{!}{\input{contents/chapter-3/fig/annotation-splitting}}
+    \caption{Annotation-aware raycast splitting. (a) The ROI is divided into overlapping tiles. Only cells whose centroids fall inside a given tile are assigned to it (centroid-owns-cell policy). (b) For each assigned cell, rays extending beyond the tile boundary are clipped to the nearest wall. Cells with fewer than $\tau_{\text{surv}}$ surviving rays are discarded.}
+    \label{fig:annotation-splitting}
+\end{figure}
+
+\paragraph{Padding.}
+After stain normalization, tiles with content smaller than $S \times S$ are padded with white pixels at the bottom and right edges. White padding is chosen because H\&E slide backgrounds are white, so the model sees the same signal at tile edges as at slide borders. Bottom-right placement preserves annotation validity: the top-left origin $(0, 0)$ remains unchanged, so centroid positions and ray distances require no modification. The original content dimensions are recorded so that the training data loader can constrain random crop origins to the tissue-containing region.
 \subsubsection{Data Augmentation Strategies}
 
-\subsection{Model Architecture}
-insert explanation on the full architecture design
-\subsubsection{Proposed Block #1}
-\subsubsection{Proposed Block #2}
-\subsubsection{Proposed Block #3}
+Standard detection augmentations assume axis-aligned bounding boxes. Raycast annotations require specialized handling: spatial transforms (flips, rotations) permute the ray distance vector without changing magnitudes; scale multiplies all distances uniformly; and crops require ray clipping and a survival-rate filter to discard cells whose shape becomes unreliable.
 
-\subsection{Training Strategy, Optimization}
+All ray permutations depend only on $R$ and the transform type, so they are precomputed at configuration time:
+
+\begin{table}[H]
+    \centering
+    \caption{Precomputed ray permutation indices for each geometric transform.}
+    \begin{tabular}{lcc}
+        \hline
+        \textbf{Transform} & \textbf{Permutation} & \textbf{Example ($R = 32$)} \\
+        \hline
+        Horizontal flip & $\pi_{\text{flip-h}}(r) = (R/2 - r) \bmod R$ & ray 0 $\to$ 16 \\
+        Vertical flip   & $\pi_{\text{flip-v}}(r) = (R - r) \bmod R$     & ray 0 $\to$ 0, ray 1 $\to$ 31 \\
+        Rotate $90^\circ$ CCW  & $\pi_{\text{rot}}(r; 1) = (r + R/4) \bmod R$   & ray 0 $\to$ 8 \\
+        Rotate $180^\circ$     & $\pi_{\text{rot}}(r; 2) = (r + R/2) \bmod R$   & ray 0 $\to$ 16 \\
+        Rotate $270^\circ$ CCW & $\pi_{\text{rot}}(r; 3) = (r + 3R/4) \bmod R$ & ray 0 $\to$ 24 \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Any augmentation that changes the spatial relationship between annotations and the canvas triggers a four-step clipping pipeline: (1) discard cells whose centroid falls outside the crop region, (2) translate surviving centroids to crop-relative coordinates, (3) for each ray, compute the distance to the four canvas boundaries and clip the ray to $d_r' = \min(d_r, d_{\max}(r))$, and (4) discard cells with fewer than $\tau_{\text{surv}} = 0.3$ surviving rays. The boundary distance $d_{\max}(r)$ is computed identically to the chopping procedure described above, using the same ray-by-ray intersection with tile edges.
+
+The following augmentations are applied during training:
+
+\textbf{Random crop.} Crop origin is constrained to the tissue-containing region to avoid sampling white padding. Annotations whose centroid falls outside the crop are dropped; remaining cells are translated to crop-relative space and rays are clipped.
+
+\textbf{Stain jitter.} A photometric-only augmentation in HSV space that mimics inter-slide stain variation without modifying any annotation field:
+
+\begin{equation}
+    H' = H + \delta_H,\quad S' = S \cdot \gamma_S,\quad V' = V \cdot \gamma_V
+\end{equation}
+
+where $\delta_H \sim \mathcal{U}[-9^\circ, 9^\circ]$, $\gamma_S \sim \mathcal{U}[0.7, 1.3]$, and $\gamma_V \sim \mathcal{U}[0.8, 1.2]$. An optional Gaussian blur is applied with probability 0.2 ($\sigma \sim \mathcal{U}[0.5, 1.0]$).
+
+\textbf{Random scale.} Isotropic scaling by $s \sim \mathcal{U}[0.7, 1.3]$: all spatial quantities (centroid, all ray distances) are multiplied by $s$. For $s > 1$, a random crop restores the image to $S \times S$; for $s \leq 1$, random padding places the scaled image on a white canvas. Boundary clipping follows.
+
+\textbf{Random translation.} Shift by $(\Delta x, \Delta y)$ with $|\Delta x|, |\Delta y| \leq \lfloor 0.1 \cdot S \rfloor$. Only centroids move (ray distances are translation-invariant), followed by boundary clipping.
+
+\textbf{Horizontal flip.} Applied with probability 0.5: centroid $\hat{x}' = S - \hat{x}$, and ray distances are permuted by the precomputed flip index.
+
+\subsection{Model Architecture}
+\begin{figure}[H]
+	\centering
+	\resizebox{0.95\textwidth}{!}{\input{contents/chapter-3/fig/raycasted}}
+	\caption{RayCastED model architecture}
+	\label{fig:raycasted}
+\end{figure}
+\subsubsection{Proposed Block \#1}
+\subsubsection{Proposed Block \#2}
+\subsubsection{Proposed Block \#3}
+
+\subsection{Training Strategy and Optimization}
 \subsubsection{Curriculum-based Label Assignment}
+explain about the dual assignment strategy where in the early epochs, the model mainly used the greedy TAL for one-to-many asssignment, and as training progressed, it gradually shifted to use hungarian bipartite matching for one-to-one assingment. this curriculum-based stategy was adopted from YOLO26 with modification to the one-to-one branch. this training strategy was designed to let the model able to predict accurate detection without the need of post-processing steps such as NMS.
+
+--> also explain the cost function used
 \subsubsection{Loss Functions}
+
 \subsubsection{Optimization Algorithms and Hyperparameters}
 
 \subsection{Evaluation Procedure}
-insert short block diagram of the evaluation procedure
+\begin{figure}[H]
+	\centering
+	\resizebox{0.95\textwidth}{!}{\input{contents/chapter-3/fig/evaluation}}
+	\caption{Evaluation Procedure Diagram}
+	\label{fig:evaluation}
+\end{figure}
+
 \subsubsection{Evaluation Metrics}
 \subsubsection{Benchmarking Against Baselines}
 \subsubsection{Generalization Testing}

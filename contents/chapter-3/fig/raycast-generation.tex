@@ -1,0 +1,75 @@
+\begin{tikzpicture}[
+	vert/.style={circle, fill=blue!70!black, inner sep=1.5pt},
+	centroid/.style={circle, fill=red, inner sep=2pt},
+	boundary/.style={thick, blue!70!black},
+	boundaryfade/.style={thin, blue!30},
+	ray/.style={->, thick, red!70!black},
+	rayghost/.style={->, thin, red!25, dashed},
+	veclabel/.style={font=\scriptsize},
+]
+
+% --- Polygon vertices (top & right only) ---
+\coordinate (v0) at ( 0.0, 2.0);
+\coordinate (v1) at ( 1.5, 2.7);
+\coordinate (v2) at ( 3.0, 2.3);
+\coordinate (v3) at ( 3.6, 1.0);
+\coordinate (v4) at ( 3.0,-0.2);
+
+% Fill: top/right edges + smooth curve closing bottom-left
+\fill[blue!8] (v0)--(v1)--(v2)--(v3)--(v4)
+	.. controls (1.8,-0.6) and (-0.2,0.4) .. (v0);
+
+% Outline: prominent on top/right, faded on bottom/left
+\draw[boundary] (v1)--(v2)--(v3);
+\draw[boundaryfade] (v3)--(v4) .. controls (1.8,-0.6) and (-0.2,0.4) .. (v0)--(v1);
+
+% Vertex dots and labels (middle vertices only)
+\foreach \v in {v1,v2,v3}
+	\node[vert] at (\v) {};
+
+\node[veclabel, above right=1pt]  at (v1) {$\mathbf{V}^{(i)}_j$};
+\node[veclabel, right=2pt]        at (v2) {$\mathbf{V}^{(i)}_{j+1}$};
+
+% --- Centroid ---
+\coordinate (c) at (1.45,1.05);
+\node[centroid, label={[veclabel]below right:$\mathbf{P}^{(i)}$}] at (c) {};
+
+% --- Ghost rays (top & right sectors only) ---
+\foreach \a in {0,45,90}
+	\draw[rayghost] (c) -- +(\a:1.6);
+
+% --- Primary annotated ray (ray r) ---
+\draw[ray] (c) -- +(18:2.5)
+	node[veclabel, red!70!black, above left=1pt, pos=0.85] {$d^{(i)}_r$};
+
+% Direction label
+\node[veclabel, red!70!black, below=2pt] at ($(c)+(18:0.7)$) {$\mathbf{D}_r$};
+
+% Angle arc from 0 to ray direction
+\draw[->, orange!80!black, thick] (c) +(0:0.8) arc[start angle=0, end angle=18, radius=0.8];
+\node[veclabel, orange!80!black] at ($(c)+(9:1.05)$) {$\theta_r$};
+
+% Reference axis
+\draw[thin, gray, ->] (c) -- +(0:1.0);
+
+% --- Edge vector E_j on edge v1→v2 ---
+\draw[->, orange!80!black, thick] ($(v1)!0.3!(v2)$) -- ($(v1)!0.7!(v2)$)
+	node[veclabel, above, sloped, pos=0.5] {$\mathbf{E}^{(i)}_j$};
+
+% --- Offset vector F_j: centroid → v1 ---
+\draw[->, teal!80!black, thick] (c) -- (v1)
+	node[veclabel, above left, pos=0.45] {$\mathbf{F}^{(i)}_j$};
+
+% --- Legend ---
+\node[draw, rounded corners=2pt, fill=white, inner sep=5pt, font=\scriptsize,
+	anchor=north west] at (4.3,3.2) {%
+	\begin{tabular}{@{}cl@{}}
+		\tikz\node[centroid, inner sep=1.5pt]{};               & Centroid $\mathbf{P}^{(i)}$ \\
+		\tikz\draw[ray](0,0)--(0.5,0);                        & Ray ($R{=}32$) \\
+		\tikz\draw[boundary](0,0)--(0.5,0);                   & Polygon boundary \\
+		\tikz\node[vert, inner sep=1.5pt]{};                   & Vertex $\mathbf{V}^{(i)}_j$ \\
+		\tikz\draw[->,orange!80!black,thick](0,0)--(0.5,0);   & Edge $\mathbf{E}^{(i)}_j$ \\
+		\tikz\draw[->,teal!80!black,thick](0,0)--(0.5,0);     & Offset $\mathbf{F}^{(i)}_j$ \\
+	\end{tabular}%
+};
+\end{tikzpicture}

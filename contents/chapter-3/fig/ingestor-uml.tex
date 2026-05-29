@@ -1,0 +1,83 @@
+\begin{tikzpicture}[
+	font=\sffamily,
+	classbox/.style={
+		rectangle split,
+		rectangle split parts=2,
+		draw,
+		thick,
+		text width=4.8cm,
+		align=center,
+		rectangle split part align={center, left},
+		inner sep=0.8ex,
+		fill=blue!8,
+		font=\tiny\sffamily
+	},
+	inheritance/.style={-{open triangle 45}, thick},
+	dependency/.style={dashed, ->, thick},
+]
+
+% === BaseDataIngestor (abstract) ===
+\node[classbox] (base) {
+	\textit{<<abstract>>}\\
+	\textbf{BaseDataIngestor}
+	\nodepart{two}
+	\raggedright
+	+ process\_item(row) \\
+	+ get\_registry(split) \\
+	+ standardize\_label() \\
+	+ standardize\_mpp() \\
+	\# \_build\_registry() \\
+	\# \_scan\_and\_pair() \\
+};
+
+% === *Ingestor ===
+\node[classbox, below=0.8cm of base] (ingestor) {
+	\textbf{*Ingestor}
+	\nodepart{two}
+	\raggedright
+	+ process\_item(row) \\
+	-- \_extract\_raycast\_ann() \\
+	-- \_extract\_bbox\_ann() \\
+};
+
+% === IngestionOrchestrator (below *Ingestor) ===
+\node[classbox, text width=4.5cm, below=0.8cm of ingestor] (orch) {
+	\textbf{IngestionOrchestrator}
+	\nodepart{two}
+	\raggedright
+	+ PARSER\_REGISTRY \\
+	+ run(dataset) \\
+	+ \_ingest\_dataset() \\
+	+ \_process\_parallel() \\
+};
+
+% === *Handler (utility, right of ingress) ===
+\node[classbox, text width=3.2cm, right=1.4cm of ingestor] (handler) {
+	<<utility>>\\
+	\textbf{*Handler}
+	\nodepart{two}
+	\raggedright
+	+ load\_data() \\
+	+ decode\_bytes() \\
+};
+
+% === RayCastGPU (utility, right of base) ===
+\node[classbox, text width=4.0cm, right=1.4cm of base] (raycast) {
+	<<utility>>\\
+	\textbf{RayCastGPU}
+	\nodepart{two}
+	\raggedright
+	+ batch\_polygon\_to\_raycast() \\
+	-- \_pad\_vertices() \\
+	-- \_compute\_centroids() \\
+	-- \_point\_in\_polygon() \\
+	-- \_solve\_ray\_intersect() \\
+};
+
+% --- Relationships ---
+\draw[inheritance] (ingestor.north) -- (base.south);
+\draw[dependency] (orch.north) -- node[right, font=\tiny, fill=white, inner sep=1pt] {<<creates>>} (ingestor.south);
+\draw[dependency] (ingestor.east) -- node[above, font=\tiny, fill=white, inner sep=1pt] {<<use>>} (handler.west);
+\draw[dependency] (ingestor.north east) -- node[above, font=\tiny, fill=white, inner sep=1pt] {<<use>>} (raycast.south west);
+
+\end{tikzpicture}

@@ -1,0 +1,23 @@
+\begin{tikzpicture}[
+	node distance=0.6cm and 0.8cm,
+	process/.style={rectangle, draw, rounded corners=3pt, fill=blue!8, minimum width=2.0cm, minimum height=0.8cm, align=center, font=\tiny},
+	dotsnode/.style={font=\scriptsize, text=gray, inner sep=2pt},
+	arrow/.style={->, thick, >=stealth},
+]
+
+
+\node[process] (benchmark) {Benchmarking\\Against Baselines};
+\node[process, right=of benchmark] (generalTest) {Generalization Testing\\against external datasets};
+\node[process, right=of generalTest] (edgeDevice) {Evaluation on\\Edge Device};
+
+
+
+% === ARROWS ===
+
+% Transform chain
+\draw[arrow] (benchmark) -- (generalTest);
+\draw[arrow] (generalTest) -- (edgeDevice);
+
+
+
+\end{tikzpicture}

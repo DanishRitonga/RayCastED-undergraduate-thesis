@@ -67,6 +67,7 @@
 \usepackage{tocloft}% edit font toc
 \usepackage{fancyhdr}% page number
 \usepackage[cmex10]{amsmath}
+\usepackage{amssymb}
 \usepackage{cite}
 \usepackage{multirow}
 \usepackage{titlesec}

@@ -1,0 +1,27 @@
+% \starconvexcoords{<name>}{<cx>,<cy>}{<r0>,<r1>,...,<rN-1>}
+%
+% Defines TikZ coordinates for a star-convex polygon:
+%   (name-c)                       -- centroid at (cx, cy)
+%   (name-0), ..., (name-N-1)      -- vertices, CCW from east
+%
+% Vertex i is at angle i * 360/N, distance r_i from centroid.
+% N is auto-detected from the length of the ray list.
+%
+% Requires: \usetikzlibrary{calc}
+%
+% Example:
+%   \starconvexcoords{cell}{2,3}{1.0,0.8,1.2,0.7,0.9}
+%   \draw[fill=blue!20] (cell-0) -- (cell-1) -- (cell-2) -- (cell-3) -- (cell-4) -- cycle;
+%   \draw[->, red] (cell-c) -- (cell-0);
+
+\newcount\scvcount
+
+\newcommand{\starconvexcoords}[3]{%
+  \coordinate (#1-c) at (#2);
+  \scvcount=0
+  \foreach \r in {#3} {\global\advance\scvcount by1}%
+  \foreach \r [count=\scvi from 0] in {#3} {%
+    \pgfmathsetmacro{\scvangle}{\scvi * 360 / \the\scvcount}%
+    \coordinate (#1-\scvi) at ($(#2) + (\scvangle:\r)$);
+  }%
+}

@@ -1,0 +1,64 @@
+\begin{tikzpicture}[
+	node distance=0.6cm and 0.8cm,
+	process/.style={rectangle, draw, rounded corners=3pt, fill=green!8, minimum width=2.0cm, minimum height=0.8cm, align=center, font=\scriptsize},
+	cache/.style={cylinder, draw, aspect=0.5, shape border rotate=90, minimum width=1.0cm, minimum height=1.1cm, font=\scriptsize, fill=gray!8},
+	loader/.style={rectangle, draw, rounded corners=3pt, fill=yellow!8, minimum width=2.0cm, minimum height=0.8cm, align=center, font=\scriptsize},
+	ingestor/.style={rectangle, draw, fill=blue!8,
+		minimum width=2.0cm, minimum height=0.7cm, align=center, font=\scriptsize},
+	dotsnode/.style={font=\scriptsize, text=gray, inner sep=2pt},
+	arrow/.style={->, thick, >=stealth},
+	edgelabel/.style={font=\tiny, fill=white, inner sep=1pt, align=center},
+]
+
+% === INGESTION GROUP (left) ===
+\node[ingestor] (ing1) {Ingestor \#1};
+\node[ingestor, below=of ing1] (ing2) {Ingestor \#2};
+\node[ingestor, below=of ing2] (ing3) {Ingestor \#3};
+\node[dotsnode, below=of ing3] (dots) {\textbf{$\vdots$}};
+\node[ingestor, below=of dots] (ingn) {Ingestor \#N};
+
+% Dashed box around ingestors
+\draw[dashed, gray, rounded corners=2pt] ([xshift=-0.3cm,yshift=0.3cm]ing1.north west) rectangle ([xshift=0.3cm,yshift=-0.3cm]ingn.south east);
+\node[font=\footnotesize\bfseries, above = 0.5 of ing1.north] {Ingestion};
+
+% === TRANSFORM GROUP (right of ingestion) ===
+\node[cache, right=2.5cm of ing3] (l1) {};
+\node[font=\scriptsize, align=center, anchor=north] at ([yshift=-2pt]l1.south) {L1\\Cache};
+\node[process, right=of l1] (chunk) {Large Slide\\Chunking};
+\node[process, right=of chunk] (stainvec) {Population-based\\Stain Vector\\Estimation};
+\node[process, right=of stainvec] (norm) {Stain\\Normalization};
+\node[process, right=of norm] (pad) {Small slide\\padding};
+\node[cache, right=2.0cm of pad] (l2) {};
+\node[font=\scriptsize, align=center, anchor=north] at ([yshift=-2pt]l2.south) {L2\\Cache};
+
+% Dashed box around transform pipeline
+\draw[dashed, gray, rounded corners=2pt] ([xshift=-0.3cm,yshift=0.4cm]chunk.north west) rectangle ([xshift=0.3cm,yshift=-0.4cm]pad.south east);
+\node[font=\footnotesize\bfseries, above right=0.3cm and 0.4cm of stainvec.north] {Transform};
+
+% === LOADER (right of transform) ===
+\node[loader, right=1.2cm of l2] (loader) {Loader};
+
+% === ARROWS ===
+% Ingestors -> L1 Cache
+\draw[arrow] (ing1.east) --  (l1.west);
+\draw[arrow] (ing2.east) --  (l1.west);
+\draw[arrow] (ing3.east) --  (l1.west);
+\draw[arrow] (ingn.east) --  (l1.west);
+
+% Label on ingestor arrows
+\node[edgelabel, anchor=west] at (1.5, -3.0) {slides with\\RayCast label};
+
+% Transform chain
+\draw[arrow] (l1) -- (chunk);
+\draw[arrow] (chunk) -- (stainvec);
+\draw[arrow] (stainvec) -- (norm);
+\draw[arrow] (norm) -- (pad);
+\draw[arrow] (pad) -- (l2);
+
+% L2 -> Loader
+\draw[arrow] (l2) -- (loader);
+
+% Label on pad -> l2 arrow
+\node[edgelabel] at ($(pad.east)!0.5!(l2.west) + (0, -0.4)$) {Standardized\\Images};
+
+\end{tikzpicture}

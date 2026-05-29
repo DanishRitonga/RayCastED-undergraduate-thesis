@@ -59,7 +59,7 @@
 
 % --- Evaluation loop: No -> Ablation -> back to Training ---
 \draw[looparrow] (meet) -- node[label, right] {No} (abl);
-\draw[looparrow] (abl.west) -- ++(-4.8,0) -| (train.south);
+\draw[looparrow] (abl.west) -- ++(-3.5,0) -| (eval.south);
 
 % --- Evaluation loop: Yes -> Deployment -> Edge eval ---
 \draw[arrow] (meet.east) -- ++(0.8,0) |- node[label, pos=0.25, right] {Yes} (deploy.east);

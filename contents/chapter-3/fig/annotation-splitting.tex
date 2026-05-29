@@ -1,0 +1,120 @@
+\begin{tikzpicture}[
+    scale=0.6,
+    every node/.style={font=\small\sffamily},
+]
+
+    % ============================================================
+    % Panel (a): ROI with tile grid and centroid-owns-cell policy
+    % ============================================================
+    \begin{scope}[shift={(0,0)}, local bounding box=panelA]
+        % ROI
+        \fill[gray!6] (0,0) rectangle (10,7);
+        \draw[thick] (0,0) rectangle (10,7);
+
+        % Grid lines
+        \draw[dashed, gray!60] (5,0) -- (5,7);
+        \draw[dashed, gray!60] (0,3.5) -- (10,3.5);
+
+        % Highlighted tile
+        \fill[green!12] (5,3.5) rectangle (10,7);
+        \draw[green!60!black, very thick] (5,3.5) rectangle (10,7);
+        \node[green!60!black, font=\bfseries\small] at (7.5,6.7) {Assigned tile};
+
+        % Discarded cells (centroids outside highlighted tile, shown without centroid dots)
+        \starconvexcoords{dc1}{2.5,5.3}{0.7,0.9, 1.1,0.8, 0.6,0.7, 0.9,0.7}
+        \draw[gray!30, thick, dashed]
+            (dc1-0) -- (dc1-1) -- (dc1-2) -- (dc1-3) --
+            (dc1-4) -- (dc1-5) -- (dc1-6) -- (dc1-7) -- cycle;
+
+        \starconvexcoords{dc2}{2.5,1.8}{0.6,0.8, 1.0,0.7, 0.5,0.6, 0.8,0.9}
+        \draw[gray!30, thick, dashed]
+            (dc2-0) -- (dc2-1) -- (dc2-2) -- (dc2-3) --
+            (dc2-4) -- (dc2-5) -- (dc2-6) -- (dc2-7) -- cycle;
+
+        \starconvexcoords{dc3}{7.5,1.8}{0.5,0.8, 0.7,0.6, 0.8,1.0, 0.9,0.6}
+        \draw[gray!30, thick, dashed]
+            (dc3-0) -- (dc3-1) -- (dc3-2) -- (dc3-3) --
+            (dc3-4) -- (dc3-5) -- (dc3-6) -- (dc3-7) -- cycle;
+
+        % Kept cell (centroid inside highlighted tile, near center of ROI)
+        \starconvexcoords{kc1}{6.5,4.5}{1.1, 1.3,1.0,0.7, 0.9,1.2, 1.3,1.0}
+        \fill[blue!70!black] (kc1-c) circle (3pt);
+        \fill[blue!12]
+            (kc1-0) -- (kc1-1) -- (kc1-2) -- (kc1-3) --
+            (kc1-4) -- (kc1-5) -- (kc1-6) -- (kc1-7) -- cycle;
+        \draw[blue!70!black, thick]
+            (kc1-0) -- (kc1-1) -- (kc1-2) -- (kc1-3) --
+            (kc1-4) -- (kc1-5) -- (kc1-6) -- (kc1-7) -- cycle;
+        \node[right=2pt, font=\small] at (kc1-c) {Kept};
+
+        \node at (panelA.south) [below=0.3cm] {(a) Centroid-owns-cell: only centroids inside the tile assign the cell};
+    \end{scope}
+
+    % ============================================================
+    % Panel (b): Ray clipping at tile boundary
+    % ============================================================
+    \begin{scope}[shift={(12,0)}, local bounding box=panelB]
+        % Tile
+        \fill[green!8] (0,0) rectangle (7,7);
+        \draw[green!60!black, very thick] (0,0) rectangle (7,7);
+
+        % Tile edge labels
+        \draw[<->, thin, green!40!black] (0,7.3) -- (7,7.3) node[midway, above, font=\footnotesize, fill=white] {$S$};
+        \draw[<->, thin, green!40!black] (7.3,0) -- (7.3,7) node[midway, right, font=\footnotesize, fill=white] {$S$};
+
+        % 4-ray star-convex cell at cardinal directions
+        \starconvexcoords{cellb}{4.5,3.0}{3.5,4.0,3.0,2.0}
+
+        % Centroid
+        \fill[blue!70!black] (cellb-c) circle (2.5pt) node[below=2pt, font=\small] {$\mathbf{c}$};
+
+        % Rays
+        \draw[red!60, thick]   (cellb-c) -- (cellb-0);   % east (exceeds tile)
+        \draw[red!60, thick]   (cellb-c) -- (cellb-1);   % north (reaches boundary)
+        \draw[blue!50, thick, densely dotted] (cellb-c) -- (cellb-2);
+        \draw[blue!50, thick, densely dotted] (cellb-c) -- (cellb-3);
+
+        % Clip points on tile boundaries
+        \fill[red] ($(cellb-c) + (0:2.5)$)  circle (2pt);  % right wall
+        \fill[red] ($(cellb-c) + (90:4.0)$) circle (2pt);  % top wall (= original vertex)
+
+        % Distance annotations
+        \draw[<->, red!70, thin] (cellb-c) -- node[below, font=\footnotesize, red!70] {$d'_{\!r}$} ($(cellb-c) + (0:2.5)$);
+        \draw[<->, blue!50, thin] ($(cellb-c) + (0.1,-0.1)$) -- node[below, font=\footnotesize, blue!50] {$d_w$} (cellb-2);
+        \draw[<->, blue!50, thin] ($(cellb-c) + (-0.15,0)$) -- node[left, font=\footnotesize, blue!50] {$d_s$} (cellb-3);
+
+        % Original ray distances
+        \node[red!60, font=\footnotesize] at ($(cellb-c) + (0:1.4)$) [below] {$d_r$};
+        \node[red!60, font=\footnotesize] at ($(cellb-c) + (90:2.0)$) [right] {$d_n$};
+
+        % Clipped polygon vertices
+        \coordinate (VcE) at ($(cellb-c) + (0:2.5)$);
+        \coordinate (VcN) at (cellb-1);
+
+        % Original polygon (dashed, extends beyond tile)
+        \draw[gray!50, densely dashed, thick] (cellb-0) -- (cellb-1) -- (cellb-2) -- (cellb-3) -- cycle;
+
+        % Clipped polygon (solid)
+        \fill[blue!12] (VcE) -- (VcN) -- (cellb-2) -- (cellb-3) -- cycle;
+        \draw[blue!70!black, thick] (VcE) -- (VcN) -- (cellb-2) -- (cellb-3) -- cycle;
+
+        % Annotation
+        \node[red!70, font=\footnotesize, right=2pt] at (VcE) {$d_r' = \min(d_r,\, d_{\text{wall}})$};
+        \node[green!40!black, font=\footnotesize, below right=2pt] at (VcN) {Tile boundary};
+
+        % Legend
+        \begin{scope}[shift={(-0.5, -1.5)}]
+            \draw[gray!50, densely dashed, thick] (0,0.5) -- (0.8,0.5);
+            \node[right, font=\footnotesize] at (0.9,0.5) {Original extent};
+            \draw[blue!70!black, thick] (0,0) -- (0.8,0);
+            \node[right, font=\footnotesize] at (0.9,0) {Clipped polygon};
+            \draw[red!60, thick] (0,-0.5) -- (0.8,-0.5);
+            \node[right, font=\footnotesize] at (0.9,-0.5) {Truncated ray};
+            \draw[blue!50, thick, densely dotted] (0,-1.0) -- (0.8,-1.0);
+            \node[right, font=\footnotesize] at (0.9,-1.0) {Ray inside tile};
+        \end{scope}
+
+        \node at (panelB.south) [below=0.3cm] {(b) Ray clipping: $d_r' = \min(d_r, d_{\text{wall}})$};
+    \end{scope}
+
+\end{tikzpicture}

@@ -19,14 +19,14 @@
 	]
 
 	% ===== BACKBONE (left column) =====
-	\node[conv] (b0) {Conv 64, s=2};
-	\node[conv, below=of b0] (b1) {Conv 128, s=2};
+	\node[conv] (b0) {haar-Conv 64, s=2};
+	\node[conv, below=of b0] (b1) {haar-Conv 128, s=2};
 	\node[c3k2, below=of b1] (b2) {C3k2 $\times$2, 256};
-	\node[conv, below=of b2] (b3) {Conv 256, s=2};
+	\node[conv, below=of b2] (b3) {haar-Conv 256, s=2};
 	\node[c3k2, below=of b3] (b4) {C3k2 $\times$2, 512};
-	\node[conv, below=of b4] (b5) {Conv 512, s=2};
+	\node[conv, below=of b4] (b5) {haar-Conv 512, s=2};
 	\node[c3k2, below=of b5] (b6) {C3k2 $\times$2, 512};
-	\node[conv, below=of b6] (b7) {Conv 1024, s=2};
+	\node[conv, below=of b6] (b7) {haar-Conv 1024, s=2};
 	\node[c3k2, below=of b7] (b8) {C3k2 $\times$2, 1024};
 	\node[sppf, below=of b8] (b9) {SPPF, 1024};
 	\node[psa, below=of b9] (b10) {C2PSA, 1024};
