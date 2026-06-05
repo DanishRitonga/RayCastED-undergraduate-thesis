@@ -5,14 +5,14 @@ Bachelor thesis (LaTeX) for DTETI UGM — "RayCastED: A RayCast End-to-end Detec
 ## Build
 
 ```bash
-latexmk -xelatex main.tex          # compile thesis (recommended)
-latexmk -c                          # clean artifacts
+latexmk -pdf main.tex                # compile thesis (pdflatex via latexmk)
+latexmk -c                           # clean artifacts
 
 # Slides (Beamer, inside slides/)
-latexmk -xelatex slides/presentation.tex
+latexmk -pdf slides/presentation.tex
 ```
 
-Manual sequence without `latexmk`: `xelatex main.tex && bibtex main && xelatex main.tex && xelatex main.tex`
+Manual sequence without `latexmk`: `pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex`
 
 Missing `.sty` at compile time? Copy from `packages/` to project root.
 

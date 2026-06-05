@@ -1,0 +1,33 @@
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, rounded corners=2pt, minimum height=0.6cm,
+        text centered, font=\scriptsize, minimum width=2.2cm, inner sep=2pt},
+    >=Latex,
+    node distance=0.4cm,
+]
+
+    % --- Stage 1 ---
+    \node[block, fill=green!8]  (a1) {Chunked Tiles};
+    \node[block, fill=green!8, below=of a1] (a2)  {Sampling 20\%};
+    \node[block, fill=green!8, below=of a2] (a3)  {Macenko};
+    \node[block, fill=green!8, below=of a3, text width=3.8cm] (a4) {Aggregate: $\overline{\mathbf{M}},\ \mathbf{c}^*_{\max}$};
+    \node[block, fill=green!15, below=of a4] (a5) {Population Profile};
+
+    \draw[->] (a1) -- (a2) -- (a3) -- (a4) -- (a5);
+
+    \node[font=\tiny\bfseries, above=0.2cm of a1] {Stage 1: once per dataset};
+
+    % --- Stage 2 (anchored to top of Stage 1) ---
+    \node[block, fill=blue!6,  anchor=north, right=1.6cm of a1.north east] (b1) {Input Tile};
+    \node[block, fill=blue!6,  below=of b1] (b2) {OD Conversion};
+    \node[block, fill=blue!6,  below=of b2] (b3) {Decompose to Conc.};
+    \node[block, fill=blue!15, below=of b3] (b4) {Scale to Profile};
+    \node[block, fill=blue!10, below=of b4] (b5) {Normalized Tile};
+
+    \draw[->] (b1) -- (b2) -- (b3) -- (b4) -- (b5);
+
+    \node[font=\tiny\bfseries, above=0.2cm of b1] {Stage 2: per tile};
+
+    % --- Cross arrow ---
+    \draw[->] (a5.east) -- (b4.west);
+
+\end{tikzpicture}

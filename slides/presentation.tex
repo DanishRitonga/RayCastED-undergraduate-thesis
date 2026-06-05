@@ -2,9 +2,10 @@
 
 \usefonttheme{professionalfonts}
 \usepackage{tikz}
-\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc}
+\usetikzlibrary{shapes.geometric, shapes.multipart, arrows.meta, positioning, calc}
 \usepackage{booktabs}
 \usepackage{caption}
+\usepackage[T1]{fontenc}
 
 \usetheme{Madrid}
 \usecolortheme{dolphin}
@@ -45,6 +46,40 @@
       \end{itemize}
     \end{alertblock}
   \end{columns}
+
+  \vspace{3em}
+
+  \begin{equation*}
+	  \text{sTILs (\%)} = \frac{\text{Area of mononuclear inflammatory cells in stroma}}{\text{Total intratumoral stromal area}} \times 100
+  \end{equation*}
+\end{frame}
+
+
+\begin{frame}{Clinical Background: Immune Cell Density Scoring}
+  \begin{columns}
+    \column{0.6\textwidth}
+    \begin{itemize}
+      \item \textbf{Immune Cell Density} quantifies the absolute number of immune cells within a defined tissue region.
+      \item Represents a shift from traditional visual area estimation to precise \textbf{single-cell enumeration}.
+      \item \textbf{Critical requirement}: robust \textbf{instance segmentation} to accurately detect, separate, and classify individual nuclei.
+    \end{itemize}
+
+    \column{0.4\textwidth}
+    \begin{alertblock}{The Challenge}
+      Manual single-cell counting is:
+      \begin{itemize}
+        \item Practically impossible at scale
+        \item Highly prone to human error
+        \item Requires digital AI pipelines for whole-slide analysis
+      \end{itemize}
+    \end{alertblock}
+  \end{columns}
+
+  \vspace{3em}
+
+  \begin{equation*}
+      \text{Immune Cell Density} = \frac{\text{Total count of detected immune cells}}{\text{Analyzed tissue area (mm}^2\text{)}}
+  \end{equation*}
 \end{frame}
 
 \begin{frame}{The Clumped Cell Problem}
@@ -52,10 +87,9 @@
     \column{0.55\textwidth}
     \begin{itemize}
       \item Densely clustered nuclei merge in segmentation masks
-      \item FCN-based models produce contiguous predictions
-      \item \textbf{Result}: Systematic undercounting
+      \item \textbf{Result}: Cell undercounting
       \item Existing solutions require costly post-processing
-      \item NMS suppresses overlapping predictions (risky in clumped regions)
+      \item Non-Max Suppression (NMS) suppresses overlapping predictions (risky in clumped regions)
     \end{itemize}
 
     \column{0.45\textwidth}
@@ -226,7 +260,7 @@
 
 \begin{frame}{Research Workflow}
   \begin{center}
-    \includegraphics[width=0.55\textwidth]{fig/research-workflow.png}
+    \resizebox{0.75\textwidth}{!}{\input{../contents/chapter-3/fig/research-workflow.tex}}
   \end{center}
 
 \end{frame}
@@ -257,13 +291,24 @@
 
 \begin{frame}{Data Preprocessing Pipeline}
   \begin{center}
-    \includegraphics[width=0.9\textwidth]{fig/data-pipeline.png}
+    \resizebox{0.95\textwidth}{!}{\input{../contents/chapter-3/fig/data-preprocessing.tex}}
   \end{center}
-  
+ 
   \begin{itemize}
     \item Multi-format dataset handling (TIFF, PNG, pickled bytes)
     \item Patch extraction and augmentation
     \item Star-convex annotation generation
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Data Ingestion Design}
+  \begin{center}
+    \resizebox{0.75\textwidth}{!}{\input{../contents/chapter-3/fig/ingestor-uml.tex}}
+  \end{center}
+ 
+  \begin{itemize}
+    \item Multi-format dataset handling (TIFF, PNG, pickled bytes)
+    \item Object-oriented design for modularity and extensibility
   \end{itemize}
 \end{frame}
 
@@ -277,61 +322,45 @@
 
 \begin{frame}{Key Innovations}
   \begin{columns}
-    \column{0.5\textwidth}
+    \column{0.45\textwidth}
     \begin{block}{1. RayCast Representation}
       \begin{itemize}
-        \item Centroid $(x, y)$ + 12 radial distances
-        \item Fixed-angle rays ($0°, 30°, ..., 330°$)
-        \item End-to-end differentiable
+        \item Centroid $(x, y)$ + $N$ radial distances
+        \item Lightweight, boundary-aware representation
       \end{itemize}
     \end{block}
 
-    \column{0.5\textwidth}
+    \column{0.45\textwidth}
     \begin{block}{2. End-to-End Assignment}
       \begin{itemize}
         \item Learned bipartite matching
         \item Eliminates NMS dependency
-        \item Prevents undercounting in clumps
       \end{itemize}
     \end{block}
   \end{columns}
 
   \vspace{1em}
-  \begin{alertblock}{3. Lightweight FCN Backbone}
-    Replaces transformer with YOLO-based FCN for edge deployment (TensorRT/ONNX Runtime)
-  \end{alertblock}
+  \begin{block}{3. Lightweight FCN Backbone}
+    \begin{itemize}
+      \item Efficient wavelet-enhanced feature extraction
+      \item TensorRT/ONNX compatible
+    \end{itemize}
+  \end{block}
 \end{frame}
 
 
 
 \section{Results}
 
-\begin{frame}{Evaluation Against LSP-DETR}
-  \begin{table}
-    \centering
-    \small
-    \begin{tabular}{llll}
-      \toprule
-      \textbf{Metric} & \textbf{LSP-DETR} & \textbf{RayCastED} & \textbf{Delta} \\
-      \midrule
-      AJI & \textbf{0.825} & 0.6385 & -0.1865 \\
-      FI & \textbf{0.677} & 0.5581 & -0.1189 \\
-      mAP@0.5 & \textbf{0.691} & 0.4275 & -0.2635 \\
-      Precision & \textbf{0.862} & 0.6848 & -0.1772 \\
-      Recall & \textbf{0.791} & 0.5980 & -0.1930 \\
-      PQ & \textbf{0.657} & 0.5433 & -0.1137 \\
-      SQ & \textbf{0.811} & 0.7460 & -0.0650 \\
-      DQ & \textbf{0.810} & 0.6817 & -0.1283 \\
-      \midrule
-      Params & 45.0M & \textbf{11.92M} & \textbf{-73.5\%} \\
-      GFLOPs & - & 4.77 & - \\
-      Inference & - & \textbf{4.17ms} & - \\
-      \bottomrule
-    \end{tabular}
-    \caption{Performance comparison with LSP-DETR baseline.}
-  \end{table}
+\begin{frame}{Evaluation Procedure}
+  \begin{center}
+    \resizebox{0.9\textwidth}{!}{\input{../contents/chapter-3/fig/evaluation.tex}}
+  \end{center}
+\end{frame}
 
-    RayCastED achieves \textbf{73.5\% fewer parameters} while maintaining competitive segmentation quality, enabling edge deployment.
+\begin{frame}{Evaluation Against LSP-DETR}
+\input{../contents/chapter-4/tab/eval}
+
 \end{frame}
 
 

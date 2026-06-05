@@ -690,7 +690,7 @@
 %% Table of Contents
 %% List of Figures and Tables
 %======================================
-\setcounter{tocdepth}{3}
+\setcounter{tocdepth}{4}
 % dot length
 \renewcommand{\cftdotsep}{1} %default: 4.5
 % Put dots for chapter entries
@@ -783,7 +783,7 @@
 	\setlength{\parindent}{1.25cm}
 }
 % depth of toc
-\setcounter{secnumdepth}{3}
+\setcounter{secnumdepth}{4}
 % set numbering style
 \renewcommand \thepart {\@Roman\c@part}
 \renewcommand \thechapter {\@Roman\c@chapter}
@@ -807,6 +807,8 @@
 \titleformat*{\section}{\raggedright\normalfont\normalsize\bfseries}
 \titleformat*{\subsection}{\raggedright\normalfont\normalsize\bfseries}
 \titleformat*{\subsubsection}{\raggedright\normalfont\normalsize\bfseries}
+\titleformat{\paragraph}[hang]{\raggedright\normalfont\normalsize\bfseries}{}{0pt}{}
+\titlespacing{\paragraph}{0pt}{12pt plus 4pt minus 2pt}{6pt plus 2pt minus 2pt}
 
 
 % Starting the main matter	
