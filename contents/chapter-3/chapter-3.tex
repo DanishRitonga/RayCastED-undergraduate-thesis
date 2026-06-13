@@ -1,26 +1,30 @@
 \chapter{Research Methodology}
 
-\section{Datasets}
+\section{Datasets and Environmental Setup}
 
 This study used publicly available secondary datasets for training and evaluation. Table~\ref{tab:datasets} summarized the datasets and their roles.
 
 \input{contents/chapter-3/tab/data}
 
-\subsection{PanNuke}
+\subsection{Datasets}
+
+\subsubsection{PanNuke}
 
 PanNuke \cite{gamper2019pannuke, gamper2020pannuke} is a large-scale pan-cancer nucleus instance segmentation dataset containing approximately 189,744 labeled nuclei across 19 tissue types. Each nucleus is annotated with an instance mask and one of five nuclear categories. The dataset is provided as pickled bytes containing image patches and corresponding label masks. In this study, PanNuke served as the primary benchmarking dataset for evaluating nuclei detection and segmentation performance.
 
-\subsection{PUMA}
+\subsubsection{PUMA}
 
 PUMA (Melanoma Histopathology Dataset with Tissue and Nuclei Annotations) \cite{schuiveling2025puma} provides annotated histopathology images for TILs detection in melanoma tissue. The dataset is distributed as TIFF images paired with GeoJSON annotation files containing polygon-level cell boundary annotations. This dataset was used to evaluate RayCastED's ability to detect and delineate TILs in a clinically relevant setting.
 
-\subsection{panopTILs}
+\subsubsection{panopTILs}
 
 panopTILs \cite{liu2022panoptils} provides TILs annotations on breast cancer histopathology images. The dataset is distributed as PNG image patches with corresponding annotation files. This dataset supplemented the TILs evaluation alongside PUMA, providing breast tissue samples for assessing TILs detection performance across cancer types.
 
-\subsection{MoNuSAC}
+\subsubsection{MoNuSAC}
 
 MoNuSAC \cite{verma2021monusac} provides annotated nuclei across multiple organ types with four nuclear categories: epithelial, lymphocyte, neutrophil, and macrophage. The dataset is provided as pickled bytes. The lymphocyte annotations in MoNuSAC were particularly relevant for evaluating TILs detection, as lymphocytes are the primary cell type of interest in TILs scoring.
+
+\subsection{Environmental Setup}
 
 \section{Methods}
 
@@ -35,14 +39,18 @@ MoNuSAC \cite{verma2021monusac} provides annotated nuclei across multiple organ 
 
 \subsubsection{Ingestion Pipeline}
 
-\paragraph{RayCast Representation Generation.}
+\subsubsubsection{RayCast Representation.}
 
 \begin{figure}[H]
     \centering
-    \resizebox{0.95\textwidth}{!}{\input{contents/chapter-2/fig/star-convex}}
-    \caption{Star-convex polygon property. (Left) A star-convex polygon with centroid $\mathbf{c}$, polar grid, and 12 radial rays with angular spacing $\theta_i$. (Right) The same representation overlaid on a histopathology cell image.}
+    \resizebox{0.55\textwidth}{!}{\input{contents/chapter-3/fig/star-convex}}
+    \caption{A star-convex polygon with centroid $\mathbf{c}$, polar grid, and 12 radial rays with angular spacing $\theta_i$.}
     \label{fig:star-convex}
 \end{figure}
+
+
+\textbf{Encoding.}
+
 
 Given a closed polygon $\mathcal{P}$ defined by an ordered set of $K$ vertices $\{\mathbf{V}_j\}_{j=0}^{K-1}$ in $\mathbb{R}^2$ and a class label $c$, the RayCast representation encodes the polygon as a fixed-length vector by expressing its boundary as radial distances from a chosen centroid along $R$ uniformly spaced angular directions. The output is an annotation vector:
 
@@ -61,10 +69,10 @@ where $(c_x, c_y)$ is the centroid, $R$ is the number of rays (set to 32 in this
 
 The generation algorithm proceeds in four stages: (1) centroid computation, (2) containment verification and exterior centroid correction, (3) ray--edge intersection solving, and (4) nearest-hit selection and output assembly. The entire pipeline is formulated as batched tensor operations for GPU parallelism, processing all polygons in a region of interest simultaneously.
 
-\paragraph{Raster Mask to Contour Extraction.}
+\textbf{Raster Mask to Contour Extraction.}
 Datasets such as PanNuke and MoNuSAC provide per-cell binary raster masks rather than polygon coordinates. For each cell, the binary mask is decoded and contour vertices are extracted via Moore-neighbor tracing (OpenCV's \texttt{findContours} with \texttt{CHAIN\_APPROX\_NONE}) to preserve full boundary fidelity. When a mask produces multiple contours, only the contour with the largest enclosed area is retained. Contours with fewer than 3 vertices are discarded.
 
-\paragraph{Centroid Computation.}
+\textbf{Centroid Computation.}
 The area-weighted centroid serves as the origin from which all rays emanate. Given the polygon vertices with cyclic indexing $\mathbf{V}_K \equiv \mathbf{V}_0$, the signed area is computed via the shoelace formula:
 
 \begin{equation}
@@ -82,7 +90,7 @@ Polygons with $|A| < \varepsilon$ (where $\varepsilon = 10^{-12}$) are near-zero
 
 For GPU-batched processing across $N$ polygons padded to $K_{\max} = \max_i K_i$ vertices, an edge mask $\mathbf{M}^{\text{edge}} \in \{0,1\}^{N \times K_{\max}}$ distinguishes real polygon edges from padding artifacts (the closing edge $j = K_i - 1$ is included). The cross-product, area, and centroid are computed element-wise and reduced over the vertex dimension in a single kernel launch.
 
-\paragraph{Containment Verification and Exterior Centroid Correction.}
+\textbf{Containment Verification and Exterior Centroid Correction.}
 For convex polygons the area-weighted centroid always lies inside the boundary. For the mildly concave nuclei encountered in histopathology, it may fall outside. A crossing-number point-in-polygon test is applied: a horizontal ray is cast in the $+X$ direction, and the number of edge crossings determines interiority (odd crossings = inside).
 
 When the centroid falls outside the polygon, a binary search positions it at an interior point. The target $\mathbf{T}$ is the mean of the three real vertices closest to the exterior centroid in Euclidean distance:
@@ -93,7 +101,7 @@ When the centroid falls outside the polygon, a binary search positions it at an 
 
 The algorithm iteratively probes the line segment $[\mathbf{P},\, \mathbf{T}]$ at fractions $\alpha \in \{0.5,\, 0.75,\, 0.875,\, 0.9375,\, 0.96875\}$, testing each candidate $\mathbf{Q}_\alpha = \mathbf{P} + \alpha (\mathbf{T} - \mathbf{P})$ for interiority via the crossing-number test. The candidate is updated only if the test succeeds. After 5 iterations the final precision is $1 - 0.96875 \approx 3.1\%$ of $\|\mathbf{T} - \mathbf{P}\|$. In practice, histopathology nuclei exhibit at most mild concavity, so the area-weighted centroid is interior in nearly all cases and the fallback is rarely triggered.
 
-\paragraph{Ray--Edge Intersection.}
+\textbf{Ray--Edge Intersection.}
 The core computation solves for the intersection of each ray with every polygon edge. The ray from centroid $\mathbf{P}$ in unit direction $\mathbf{D}_r = (\cos\theta_r,\; \sin\theta_r)^\top$ is parameterized as:
 
 \begin{equation}
@@ -126,7 +134,7 @@ The system is solved via Cramer's rule using the 2D cross product $\mathbf{a} \t
 
 The right-hand side $\mathbf{b}_j$ is independent of the ray direction; only the first column of $\mathbf{M}_{rj}$ varies with $r$. Each $(r,j)$ pair is solved independently, enabling full data-parallelism over all three dimensions (polygon, ray, edge) simultaneously.
 
-\paragraph{Validity Filtering and Nearest-Hit Selection.}
+\textbf{Validity Filtering and Nearest-Hit Selection.}
 An intersection is valid if and only if: (1) $|\text{det}_{rj}| > \epsilon_d$ (ray is not parallel to the edge, $\epsilon_d = 10^{-10}$), (2) $t_{rj} > 0$ (intersection lies in front of the centroid; the strict inequality prevents self-intersection artifacts when the centroid lies exactly on the boundary), (3) $-\epsilon \leq s_{rj} \leq 1 + \epsilon$ (intersection falls on the edge segment, $\epsilon = 10^{-6}$), and (4) the edge is a real polygon edge (not a padding artifact). Degenerate cases are handled as follows:
 
 \begin{itemize}
@@ -144,14 +152,14 @@ For each ray $r$, the boundary distance is the minimum positive $t$ among valid 
 
 Since $\mathbf{D}_r$ is a unit vector, $d_r = t_{rj^*}$ is directly the Euclidean distance from the centroid to the boundary intersection. Rays with no valid intersection ($\mathcal{V}_r = \emptyset$) are assigned $d_r = 0$, following the convention that zero distance indicates a missed ray.
 
-\paragraph{Batched GPU Implementation.}
+\textbf{Batched GPU Implementation.}
 The entire pipeline is implemented as vectorized tensor operations in PyTorch, processing all $N$ polygons in a region of interest simultaneously on GPU. Polygons are padded to $K_{\max}$ vertices by repeating the last vertex; past the real vertex count, the padding creates degenerate zero-length edges that naturally fail the determinant check and are excluded from results.
 
 The core intersection solve operates over the full $(N, R, K_{\max})$ tensor. Input shapes are broadcast as follows: vertex coordinates $(N, 1, K_{\max})$, centroid $(N, 1, 1)$, ray trig functions $(1, R, 1)$, expanding element-wise to $(N, R, K_{\max})$. All Cramer's rule computations, validity masking, and the final $\min$-reduction over the edge dimension execute in a single kernel launch without explicit loops.
 
 The computational work scales as $O(N \cdot R \cdot K_{\max})$. The only serial component is the exterior centroid fallback (5 binary search iterations), which operates on a negligible fraction of the batch since histopathology nuclei rarely produce exterior centroids. For a typical region of interest ($N \approx 1000$, $R = 32$, $K_{\max} \approx 500$), the intersection tensors require approximately $4 \cdot N \cdot R \cdot K_{\max} \approx 64\text{MB}$ each, well within modern GPU memory.
 
-\paragraph{Inverse Decoding.}
+\textbf{Decoding.}
 The raycast representation decodes back to a polygon by reconstructing vertex positions from the centroid and radial distances:
 
 \begin{equation}
@@ -167,7 +175,7 @@ connected cyclically. In batched form for $N$ annotations with distance matrix $
 
 yielding vertex coordinates $\mathbf{V} \in \mathbb{R}^{N \times R \times 2}$. The angular constants are precomputed once and shared across ingestion, model inference, loss computation, and evaluation.
 
-\paragraph{Data Ingestion Design.}
+\subsubsubsection{Data Ingestion Design.}
 
 \begin{figure}[H]
 	\centering
@@ -190,10 +198,10 @@ The \texttt{IngestionOrchestrator} governs the end-to-end process: a string-keye
 
 \subsubsection{Transform Pipeline}
 
-\paragraph{Data Profile Registration.}
+\subsubsubsection{Data Profile Registration.}
 Before any per-tile transformation is applied, the ingestion pipeline registers a data profile for each image in the dataset. This profile captures three categories of metadata that downstream transforms consume: (1) \textbf{tissue type and dataset source}, recorded as a string identifier and integer encoding, enabling stratified sampling across datasets and tissue categories during population-level stain estimation; (2) \textbf{native image dimensions} $(W, H)$ and \textbf{microns-per-pixel} (MPP), required by the size standardization step to compute chopping and padding parameters; and (3) \textbf{tile-level stain statistics}, including a boolean flag indicating whether the tile contains sufficient tissue content (at least 100 non-white pixels) to be eligible for stain vector estimation. Profiles are assembled during the ingestion registry phase and serialized alongside the raycast annotations, so that the transform pipeline can load them without re-reading the source images. This separation ensures that the transform pipeline operates purely on pre-computed metadata rather than performing redundant I/O.
 
-\paragraph{Stain Vector Estimation and Normalization.}
+\subsubsubsection{Stain Vector Estimation and Normalization.}
 
 Histopathology images exhibit substantial color variation across scanners, staining batches, and laboratories. A model trained on darkly-stained slides may perform poorly on lightly-stained ones. The transform pipeline addresses this through a three-phase process. First, images are chopped into $S \times S$ tiles. Second, a subset of tiles is Pareto-sampled, the Macenko method \cite{macenko2009} estimates per-tile stain vectors, and the results are aggregated into a population-level profile. Third, every tile is normalized against this profile and padded to a uniform size.
 
@@ -262,7 +270,7 @@ The full transform can be expressed compactly as:
 \end{equation}
 
 
-\paragraph{Image Size Standardization.}
+\subsubsubsection{Image Size Standardization.}
 
 Every ingested image must be reduced to a fixed $S \times S$ canvas (defaulting to 256$\times$256 pixels) suitable for batched GPU training. Two operations handle the two possible regimes: images larger than $S$ in either dimension are \textbf{chopped} into overlapping tiles; images smaller than or equal to $S$ are \textbf{padded} with white pixels at the bottom and right edges.
 
@@ -298,7 +306,7 @@ where $\tau_{\text{survival}} = 0.5$. This prevents heavily truncated cells with
 After stain normalization, tiles with content smaller than $S \times S$ are padded with white pixels at the bottom and right edges. White padding is chosen because H\&E slide backgrounds are white, so the model sees the same signal at tile edges as at slide borders. Bottom-right placement preserves annotation validity: the top-left origin $(0, 0)$ remains unchanged, so centroid positions and ray distances require no modification. The original content dimensions are recorded so that the training data loader can constrain random crop origins to the tissue-containing region.
 \subsubsection{Data Augmentation Strategies}
 
-\paragraph{RayCast Permutations.}
+\subsubsubsection{RayCast Permutations.}
 Standard detection augmentations assume axis-aligned bounding boxes. Raycast annotations require specialized handling: spatial transforms (flips, rotations) permute the ray distance vector without changing magnitudes; scale multiplies all distances uniformly; and crops require ray clipping and a survival-rate filter to discard cells whose shape becomes unreliable.
 
 All ray permutations depend only on $R$ and the transform type, so they are precomputed at configuration time:
@@ -321,7 +329,7 @@ All ray permutations depend only on $R$ and the transform type, so they are prec
 
 Any augmentation that changes the spatial relationship between annotations and the canvas triggers a four-step clipping pipeline: (1) discard cells whose centroid falls outside the crop region, (2) translate surviving centroids to crop-relative coordinates, (3) for each ray, compute the distance to the four canvas boundaries and clip the ray to $d_r' = \min(d_r, d_{\max}(r))$, and (4) discard cells with fewer than $\tau_{\text{surv}} = 0.3$ surviving rays. The boundary distance $d_{\max}(r)$ is computed identically to the chopping procedure described above, using the same ray-by-ray intersection with tile edges.
 
-\paragraph{Augmentation Operations.}
+\subsubsubsection{Augmentation Operations.}
 The following augmentations are applied during training:
 
 \textbf{Random crop.} Crop origin is constrained to the tissue-containing region to avoid sampling white padding. Annotations whose centroid falls outside the crop are dropped; remaining cells are translated to crop-relative space and rays are clipped.
@@ -343,24 +351,115 @@ where $\delta_H \sim \mathcal{U}[-9^\circ, 9^\circ]$, $\gamma_S \sim \mathcal{U}
 \subsection{Architecture Design}
 \begin{figure}[H]
 	\centering
-	\resizebox{0.95\textwidth}{!}{\input{contents/chapter-3/fig/raycasted}}
+	\includegraphics[width=0.95\textwidth]{contents/chapter-3/fig/RayCastED.pdf}
 	\caption{RayCastED model architecture}
 	\label{fig:raycasted}
 \end{figure}
-\subsubsection{Proposed Block \#1}
-\subsubsection{Proposed Block \#2}
-\subsubsection{Proposed Block \#3}
+\subsubsection{Design Considerations}
+
+Contour-based instance segmentation shares its architectural structure with object detection rather than with mask-based segmentation. Both contour-based instance segmentation and detection operate on an anchor grid, predict a sparse set of geometric parameters per location, and train through matching mechanisms rather than per-pixel classification. The star-convex ray representation used in this work replaces the bounding box regression target with polygon boundary distances. This is a change to the regression target, not to the underlying prediction paradigm, making the mature detection architecture ecosystem directly applicable. Four requirements constrain the base model choice: a fully convolutional backbone for lightweight inference, single-stage prediction for computational efficiency, an established architecture for reproducibility, and NMS-free operation to avoid the density-dependent counting bias described in Section~\ref{sec:nms} [TODO]. YOLO26 satisfies all four through its dual-label assignment strategy~\ref{sec:dual-label} [TODO], which enables one-to-one matching at inference without post-processing. Its implementation within the Ultralytics framework further provides optimized training pipelines and export pathways for edge deployment.
+
+YOLO26 is designed for general objects and employs feature pyramid levels P3 through P5 (strides 8, 16, and 32). For a $256 \times 256$ input, these produce feature maps of $32 \times 32$, $16 \times 16$, and $8 \times 8$. Nuclei in H\&E histopathology at 0.25 MPP typically measure 7 to 20~$\mu$m in diameter (28 to 80 pixels), making them small and densely packed relative to general objects. The P5 level at $8 \times 8$ resolution is too coarse to localize individual nuclei, and even P3 at $32 \times 32$ may miss the smallest cells. RayCastED therefore shifts the active pyramid levels to P2 through P4 (strides 4, 8, and 16), yielding a finest feature map of $64 \times 64$ for precise centroid localization. Extending to P2 through P5 is possible but adds anchor positions and backbone complexity that are redundant for nuclei-sized objects, which rarely require the receptive field of P5~\ref{sec:fpn} [TODO].
+
+Standard downsampling operations (strided convolution and max pooling) act as low-pass filters that discard high-frequency content during feature map reduction. For large objects, this is acceptable because discriminative features reside in coarse shape and texture. For small nuclei, however, much of the discriminative signal lies in fine edges, chromatin texture, and boundary transitions that are smoothed away during standard downsampling~\ref{sec:dwt} [TODO]. Discrete Wavelet Transform (DWT) based downsampling addresses this by decomposing the feature map into LL (approximation) and LH, HL, HH (detail) subbands. The LL subband serves as the downsampled representation while the detail subbands are preserved rather than discarded, retaining high-frequency information that would otherwise be lost~\ref{sec:dwt-cnn} [TODO].
+
+The P2 through P4 configuration generates approximately 5,376 anchor locations for a $256 \times 256$ input ($64^2 + 32^2 + 16^2$). A typical histopathology tile contains on the order of 100 nuclei, yielding a foreground-to-background ratio of roughly 100/5,376 ($\approx$1.9\%). A single classification head forced to simultaneously discriminate foreground from background and classify cell types under such extreme imbalance produces weak gradients for both tasks. RayCastED addresses this by splitting classification into a binary head (foreground/background, 1 channel) trained on all anchors and a multiclass head (cell type, $n_c$ channels) trained only on foreground anchors. At inference, the final score is $\sigma(\text{binary}) \times \text{softmax}(\text{class})$, ensuring that only confident foreground predictions contribute to class probabilities.
+
+Dual-label assignment~\ref{sec:dual-label} [TODO] eliminates NMS by enforcing one-to-one matching within each pyramid level, but does not address cross-scale duplicates: the same nucleus may produce confident predictions at two adjacent pyramid levels simultaneously~\ref{sec:fpn} [TODO]. Conventional NMS is unsuitable for resolving these duplicates in dense nuclei, as valid detections of adjacent cells are indistinguishable from duplicate predictions based on overlap alone~\ref{sec:nms} [TODO]. Inter-scale competition complements dual-label assignment by normalizing classification scores across the scale dimension via softmax before output decoding. This operation suppresses lower-confidence cross-scale predictions during both training and inference in a fully differentiable manner, without requiring a hand-tuned IoU threshold.
+
+\subsubsection{Proposed Architecture Components}
+\subsubsubsection{ResoConv.}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.65\textwidth]{contents/chapter-3/fig/ResoConv.pdf}
+	\caption{ResoConv}
+	\label{fig:resoconv}
+\end{figure}
+
+ResoConv replaces each strided downsampling step in the backbone and neck with a Haar DWT decomposition. The transform is implemented as a depthwise convolution with stride 2, where the four Haar filters are pre-computed and registered as non-trainable buffers. Depthwise convolution is used here for two reasons. First, the wavelet decomposition is inherently a per-channel operation: each input channel represents an independent feature map that should be decomposed independently, without cross-channel mixing during the transform itself. Cross-channel combination is deferred to the subsequent $1 \times 1$ projection. Second, depthwise convolution reduces the computational cost from $K^2 \cdot C^2$ to $K^2 \cdot C$ per spatial position~\ref{sec:depthwise-conv} [TODO], which is significant given that ResoConv replaces every downsampling layer in both the backbone and neck. Unlike standard strided convolution, which acts as a learned low-pass filter and discards high-frequency content irreversibly, the DWT preserves this information explicitly across the four subbands~\ref{sec:dwt-cnn} [TODO].
+
+The four subbands are concatenated along the channel dimension and passed through a Squeeze-and-Excitation (SE) channel attention module. SE performs global average pooling followed by a bottleneck fully-connected layer, a ReLU activation, a restoring layer, and a sigmoid gate that produces per-channel weights. This allows the network to learn the relative importance of each subband at each layer: in early layers, high-frequency detail subbands may receive higher weights for boundary delineation, while in deeper layers, the LL approximation may dominate for semantic feature extraction. The SE-reweighted features are then projected to the target channel count via a $1 \times 1$ convolution, producing the final output at half spatial resolution.
+
+\subsubsubsection{RayCastDetect.}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=1.10\textwidth]{contents/chapter-3/fig/RayCastDetect.pdf}
+	\caption{RayCastDetect}
+	\label{fig:raycastdetect}
+\end{figure}
+
+RayCastDetect extends the YOLO detection head to predict star-convex polygon parameters instead of axis-aligned bounding boxes. For each anchor, the regression branch produces $2 + R$ values: two centroid offsets and $R = 64$ ray distances radiating from the centroid at evenly spaced angles. The classification branch is split into a binary foreground/background head and a multiclass head with $n_c$ channels, yielding a total of $3 + R + n_c$ output values per anchor. The head is trained with dual-label assignment~\ref{sec:dual-label} [TODO] using a one-to-many (o2m) head for rich supervision and a one-to-one (o2o) head for NMS-free inference; the o2m head is discarded after training. Three key design choices distinguish RayCastDetect from the standard YOLO head: inter-scale competition to suppress cross-scale duplicate detections, a split classification head to address foreground-background imbalance, and a regression head with RayRefinementBlock to smooth spatially inconsistent ray predictions.
+
+\subparagraph{Inter-scale Competition.}
+
+Operating across three feature scales (P2, P3, P4), the head often assigns high confidence to the same nucleus at multiple scales simultaneously, producing cross-scale duplicate detections. Inter-scale competition addresses this by upsampling the classification scores from all scales to P2 resolution, applying softmax across the scale dimension, and multiplying each scale's confidence by its resulting competition weight. This mechanism is fully differentiable and operates during both training and inference, providing a learned, soft suppression that complements (rather than replaces) the dual-label assignment strategy~\ref{sec:dual-label} [TODO]. Unlike NMS~\ref{sec:nms} [TODO], which requires a hand-tuned IoU threshold and is applied post-hoc, inter-scale competition is integrated into the network and suppresses duplicates through gradient-descent-optimized weights.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=1.10\textwidth]{contents/chapter-3/fig/CLS Head.pdf}
+	\caption{Split Classification Head}
+	\label{fig:cls-head}
+\end{figure}
+
+\subparagraph{Split Classification Head.}
+
+The P2-P4 scale configuration at $256 \times 256$ pixel input produces approximately 5{,}376 anchors per image, yet a typical histopathology image contains fewer than 100 nuclei. This extreme foreground-background imbalance makes joint objectness and classification difficult for a single head. RayCastDetect therefore splits the classification branch into a binary head with one channel that is applied to all anchors, and a multiclass head with $n_c$ channels that is supervised only on foreground anchors. At inference, the two are combined as $P(\text{fg}) \times P(\text{type} \mid \text{fg})$, i.e., $\text{sigmoid}(\text{binary}) \times \text{softmax}(\text{class})$. This decomposition separates the easier binary problem of distinguishing nucleus from background, where the binary head can exploit all anchor signals, from the harder multiclass problem of cell-type discrimination, where the class head focuses exclusively on foreground samples.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=1.10\textwidth]{contents/chapter-3/fig/REG Head.pdf}
+	\caption{Regression Head with RayCast Refinement}
+	\label{fig:reg-head}
+\end{figure}
+
+\subparagraph{Regression Head.}
+
+The regression branch produces the polygon parameters per anchor through two $3 \times 3$ convolution layers, a RayRefinementBlock, and a final $1 \times 1$ convolution that outputs $2 + R = 66$ channels: two centroid offsets and 64 ray distances. The RayRefinementBlock applies a $3 \times 3$ depthwise convolution followed by GroupNorm and SiLU activation with a residual skip connection. GroupNorm is preferred over BatchNorm because each scale level (P2, P3, P4) maintains independent head weights, including its own RayRefinementBlock, and the three scales operate at different spatial resolutions ($64 \times 64$, $32 \times 32$, $16 \times 16$) with different object distributions: P2 densely covers small nuclei, while P4 sparsely covers larger structures. BatchNorm would maintain separate running mean and variance statistics per scale computed over these inconsistent conditions, leading to unstable normalization when the statistics do not transfer cleanly. GroupNorm normalizes within channel groups per sample, avoiding any cross-scale or batch-dimension dependency. The residual connection ensures the block refines rather than replaces the existing features: since the purpose is to smooth spatially inconsistent ray predictions by blending neighboring anchor features, the skip connection guarantees that the base prediction is preserved when no correction is needed. The two centroid channels use sigmoid activation to produce bounded $[0, 1]$ grid-cell offsets, while the 64 ray channels use softplus activation to ensure strictly positive distances. Bias initialization sets the ray channels to the minimum plausible nucleus size using the formula $(d_{\min} + \epsilon) / (2 \cdot S \cdot \rho)$, where $d_{\min} = 3.0~\mu\text{m}$ is the minimum nucleus diameter, $\epsilon = 0.5~\mu\text{m}$ is a linear approximation buffer, $S = 256$ is the crop size in pixels, and $\rho = 0.25~\mu\text{m/pixel}$ is the scanning resolution. This yields a normalized target of $3.5 / 128 \approx 0.027$, corresponding to a 7~pixel radius at $0.25~\mu\text{m/pixel}$. The inverse softplus of this value is used as the bias so that $\text{softplus}(\text{bias})$ produces the target directly at initialization, providing a unidirectional expansion gradient at the start of training.
 
 \subsection{Training Strategy and Optimization}
 \subsubsection{Curriculum}
-explain about the dual assignment strategy where in the early epochs, the model mainly used the greedy TAL for one-to-many asssignment, and as training progressed, it gradually shifted to use hungarian bipartite matching for one-to-one assingment. this curriculum-based stategy was adopted from YOLO26 with modification to the one-to-one branch. this training strategy was designed to let the model able to predict accurate detection without the need of post-processing steps such as NMS.
 
---> also explain the cost function used
-\subsubsection{Loss Functions}
+Training uses the MuSGD optimizer, which applies the Muon optimizer~\ref{sec:muon} [TODO] to two-dimensional weight matrices (convolution kernels, linear layers) and standard SGD with Nesterov momentum to one-dimensional parameters (biases, normalization scales). This hybrid leverages Muon's orthogonalized gradient updates for the high-rank weight matrices that dominate model capacity while retaining SGD stability for scalar parameters. The base learning rate is $0.01$, momentum $0.937$, weight decay $5 \times 10^{-4}$, and gradients are clipped to a maximum norm of $10.0$. Training uses a batch size of 16 on $256 \times 256$ pixel crops.
 
-\subsubsection{Auxiliary Heads}
+The learning rate follows cosine annealing with warm restarts (SGDR)~\cite{loshchilov2017sgdr}, with initial cycle length $T_0 = 133$ epochs, cycle multiplier $T_{\text{mult}} = 1$, and minimum learning rate $\eta_{\min} = 10^{-4}$. This produces three equal cycles over the full training run. Each restart abruptly increases the learning rate, helping the optimizer escape sharp minima and explore broader regions of the loss landscape before annealing again.
 
-\subsubsection{Optimization Algorithm and Hyperparameters}
+Three annealing schedules progressively shift the training objective. First, the o2m and o2o loss weights transition linearly from $0.8/0.2$ to $0.1/0.9$, gradually shifting from dense one-to-many supervision to clean one-to-one matching for NMS-free inference~\ref{sec:dual-label} [TODO]. Second, the o2o assigner's topk2 parameter anneals from 3 to 1 (one-to-few to one-to-one), beginning at epoch 67 and completing at 50\% of the training schedule, allowing multiple positive anchors per ground truth during early feature learning before converging to the strict bipartite matching required at inference. Third, the smoothness loss weight $\lambda_{\text{smooth}}$ ramps from 0 to 3 over the first 40\% of epochs, letting the ray predictions fit target shapes before enforcing boundary regularization.
+
+\subsubsection{Assignment}
+
+RayCastDetect uses two parallel instances of RayCastAssigner, which extends the task-aligned matching~\ref{sec:tal} [TODO] strategy by replacing standard IoU with PolarIoU in the alignment metric. The one-to-many branch uses $\text{topk} = 15$ and $\text{topk}_2 = 15$ for dense multi-anchor supervision, while the one-to-one branch uses $\text{topk} = 7$ (candidate pool) and $\text{topk}_2 = 3 \to 1$ (annealed). The o2m alignment metric is:
+
+\begin{equation}
+    t = s^{\alpha} \cdot \text{PolarIoU}^{\beta} \cdot \exp\!\left(\frac{-d^2}{2\sigma^2}\right)
+\end{equation}
+
+where $s$ is the classification score, $\alpha = 0.5$, $\beta = 2.0$, $d$ is the centroid-to-anchor distance, and $\sigma$ is the per-nucleus radius computed as the 75th-percentile non-zero ray distance multiplied by a scale factor of 1.0. The inclusion of PolarIoU in the o2m metric ensures that early training prioritizes geometric quality: anchors are rewarded for producing well-shaped polygons, not just confident classifications. The Gaussian spatial decay term $\exp(-d^2 / 2\sigma^2)$ restricts high alignment scores to spatially proximate anchors, with $\sigma$ adapted to each nucleus size.
+
+The o2o branch uses classification-only task-aligned matching ($\text{cls}^{\alpha} \cdot \exp(-d^2/2\sigma^2)$, without PolarIoU), forcing the classification head to become the primary ranking signal. This matches inference conditions, where no localization feedback is available to resolve assignment ambiguity, and creates a self-reinforcing dynamic: higher classification confidence yields better assignments, which in turn produce stronger classification gradients.
+
+\subsubsection{Loss Function}
+
+The total training loss combines five terms:
+
+\begin{equation}
+    \mathcal{L} = \lambda_{\text{cls}} \mathcal{L}_{\text{cls}} + \lambda_{\text{xy}} \mathcal{L}_{\text{xy}} + \lambda_{\text{L1}} \mathcal{L}_{\text{L1}} + \lambda_{\text{piou}} \mathcal{L}_{\text{piou}} + \lambda_{\text{smooth}} \mathcal{L}_{\text{smooth}}
+\end{equation}
+
+with weights $\lambda_{\text{cls}} = 2.0$, $\lambda_{\text{xy}} = 500.0$, $\lambda_{\text{L1}} = 14.0$, $\lambda_{\text{piou}} = 3.0$, and $\lambda_{\text{smooth}}$ annealed from 0 to 3 over the first 40\% of training. Each branch (o2m and o2o) computes this loss independently, and the two are combined using the o2m/o2o weight schedule described above.
+
+The classification loss differs between branches. The o2m head uses focal loss ($\gamma = 2.0$, $\alpha = 0.75$) with background subsampling at a 3:1 ratio of background to foreground anchors. The o2o head, using the split classification design, applies focal loss ($\gamma = 2.0$, $\alpha = 0.75$) on the binary foreground/background head across all anchors, and binary cross-entropy on the multiclass head restricted to foreground anchors only.
+
+The ray distance loss $\mathcal{L}_{\text{L1}}$ is the most distinctive component. During data ingestion, ground-truth ray distances are computed by casting rays from the annotation centroid to the polygon boundary using geometric line intersection. During training, this same raycasting operation is reformulated as a differentiable Cramer's rule solver that computes analytical ray distances from the \emph{predicted} centroid (with gradients detached) to the ground-truth polygon boundary. The loss is then evaluated in log-space:
+
+\begin{equation}
+    \mathcal{L}_{\text{L1}} = \frac{1}{R} \sum_{i=1}^{R} \left| \log(\hat{d}_i + \varepsilon) - \log(d_i^{\text{analytical}} + \varepsilon) \right|
+\end{equation}
+
+This analytical recomputation decouples centroid accuracy from ray supervision: the ray head is always judged against geometrically correct targets for the position where the model actually placed the centroid, rather than against static targets computed from the ground-truth centroid. If the predicted centroid shifts from the ground-truth centroid, the target rays adapt accordingly, preventing conflicting gradient signals between the centroid and ray branches. Log-space evaluation provides scale-invariant gradients, applying equal relative penalty for over-prediction and under-prediction regardless of absolute ray length.
+
+The centroid loss $\mathcal{L}_{\text{xy}}$ uses Huber loss ($\delta = 0.05$) on normalized grid-cell offsets. The high weight $\lambda_{\text{xy}} = 500$ compensates for gradient attenuation caused by the sigmoid activation, stride multiplication, and pixel-space normalization that the offsets undergo during decoding. The PolarIoU loss $\mathcal{L}_{\text{piou}} = -\log(\text{PolarIoU})$ operates on static ground-truth rays (not analytical) and provides shape-aware geometric supervision through sector-area decomposition, where each sector area is $\frac{1}{2} \sin(2\pi/N) \, d_i \, d_{i+1}$, coupling adjacent rays through shared area computation. The smoothness loss $\mathcal{L}_{\text{smooth}}$ penalizes second-order circular curvature $\left|d_{i+1} - 2d_i + d_{i-1}\right|$ to regularize boundary roughness, with its weight annealed from 0 to 3 as described in the curriculum.
 
 \subsection{Evaluation Procedure}
 \begin{figure}[H]
@@ -371,17 +470,24 @@ explain about the dual assignment strategy where in the early epochs, the model 
 \end{figure}
 
 \subsubsection{Evaluation Metrics}
+
+Predicted star-convex polygons are rasterized to binary masks for overlap-based evaluation. When multiple predicted masks overlap at the same pixel, the largest mask receives priority, following the LSP-DETR evaluation protocol to ensure fair comparison of methods that predict overlapping nuclei boundaries. All PQ-family metrics use Hungarian matching between predicted and ground-truth masks at IoU $\geq 0.5$. The F1 score, precision, and recall use centroid-based matching at a distance threshold of 12 pixels, and AJI uses its own global intersection-over-union formulation~\ref{sec:aji} [TODO]. During training validation, bPQ is computed from PolarIoU (analytical, no rasterization required) as a fast proxy; final evaluation uses rasterized mask IoU for accuracy.
+
+Three categories of metrics are reported. Detection quality is measured by F1, precision, recall, and the total number of predicted nuclei (indicating over- or under-segmentation tendency). Segmentation quality is measured by bPQ (binary, all classes merged), mPQ (per-class, averaged over the five PanNuke nuclei types), and AJI (global instance-level). Efficiency is measured by GFLOPs, parameter count, and runtime in milliseconds per image. The model selection fitness during training is $0.7 \times \text{bPQ} + 0.3 \times \text{mAP}_{50}$, following the Ultralytics convention where mAP at IoU 0.5 provides detection-quality feedback alongside the segmentation-focused bPQ.
+
 \subsubsection{Benchmarking}
+
+RayCastED is trained on PanNuke Fold 1, validated on Fold 2, and tested on Fold 3. The Base (B) variant is compared against StarDist~\cite{schmidt2018stardist}, LKCell~\cite{cui2024lkcell}, HoVer-NeXt~\cite{graham2024hovernext}, and CellPose-SAM. All baselines are trained and evaluated on the same PanNuke fold split under their respective published configurations. A confidence threshold of 0.20 is used for all RayCastED predictions to test the model's raw ranking quality rather than relying on aggressive thresholding to suppress false positives. All metrics described above are reported in a comprehensive comparison table.
+
 \subsubsection{Generalization Test}
+
+To assess cross-dataset generalization, RayCastED trained on PanNuke Fold 1 is evaluated without fine-tuning on MoNuSAC~\cite{verma2020monusac} and PUMA. Only AJI, bPQ, and F1 are reported to avoid dataset taxonomy clashes: MoNuSAC defines four nuclei classes and PUMA uses a different class schema, making per-class mPQ comparisons across datasets misleading. Class labels from target datasets are harmonized to PanNuke's taxonomy where unambiguous mappings exist; where mappings are unclear, evaluation collapses to binary foreground/background. Results indicate whether features learned across PanNuke's 19 tissue types transfer to unseen tissues, staining protocols, and scanning resolutions.
+
 \subsubsection{Evaluation on Edge Device}
 
-\subsection{Inference Pipeline}
-TODO : add details
+Two runtime backends are benchmarked on the desktop GPU (RTX 5070 Ti): native PyTorch and TensorRT. The PyTorch runtime serves as the accuracy reference and the TensorRT runtime establishes the performance ceiling achievable on a high-power GPU before edge deployment.
 
-\subsection{Deployment Architecture}
-\subsubsection{Edge Device Specifications}
-\subsubsection{Model Export Strategy}
-\subsubsection{Environment Setup}
+For edge deployment, the model is exported to ONNX (opset 17, graph simplified) and deployed on a Jetson Orin Nano. The ONNX graph exports raw logits only; all decoding (sigmoid for centroid offsets, softplus for ray distances, grid decoding, hierarchical classification combination) and postprocessing (top-k selection, confidence filtering, polygon scaling) are performed in a Python layer on-device. Three edge runtime configurations are evaluated: ONNX Runtime, TensorRT FP32, and TensorRT FP16. All configurations are tested on PanNuke Fold 3 for accuracy parity with the desktop results. Runtime is measured via wall-clock timing over all test images, reported as milliseconds per image. All metrics except GFLOPs and parameter count are reported, since the architecture is identical across backends. The FP32 versus FP16 comparison quantifies the accuracy-speed trade-off of half-precision inference on edge hardware.
 
 \section{Research Workflow}
 
@@ -391,6 +497,3 @@ TODO : add details
 	\caption{Research workflow diagram illustrating the iterative development process of the RayCastED model, from literature review and data preparation through model development, training, evaluation, and deployment.}
 	\label{fig:research-workflow}
 \end{figure}
-
-Menguraikan prosedur yang akan digunakan dan jadwal atau alur penyelesaian setiap 
-tahap. Alur penelian ini dapat disajikan dalam bentuk diagram. Diagram dapat disusun dengan aturan yang baik semisal menggunakan \textit{flowchart}. Aturan dan tutorial pembuatan \textit{flowchart} dapat dilihat di \textcolor{blue}{http://ugm.id/flowcharttutorial}. Setelah menggambarkannya, penulis wajib menjelaskan langkah-langkah setiap alur tugas akhir dalam sub bab tersendiri sesuai dengan kebutuhan.

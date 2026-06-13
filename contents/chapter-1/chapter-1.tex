@@ -2,30 +2,24 @@
 
 \section{Background}
 
-Vision-based deep learning models have become a standard tool for analyzing the tumor microenvironment (TME) in whole-slide images (WSIs) of histopathology tissue. Among the many biomarkers extracted from the TME, tumor-infiltrating lymphocytes (TILs) density is an established prognostic indicator in multiple cancer types \cite{salgado2015evaluation}. The International TILs Working Group recommends scoring TILs by estimating the percentage of stromal area occupied by lymphocytes, which is fundamentally an \textit{area-based} measurement that depends on accurately delineating cell boundaries rather than merely locating cell centroids. Historically, segmentation-based approaches have been the standard for this task, as they assign a class label to every pixel and thereby produce the per-cell boundary maps needed for area measurement.
+Nuclei segmentation is a critical first step in the analysis of histopathological images from Whole Slide Images (WSIs), as it underpins many downstream processes such as tumor grading, cellular composition analysis, and biomarker quantification \cite{basu2023survey}. In recent years, deep learning (DL) has become the staple approach for performing nuclei segmentation, driven by its ability to learn hierarchical features directly from data \cite{basu2023survey,deng2020deep}. Despite these advances, one of the principal difficulties that DL models continue to face is the presence of clumped nuclei, which results in overlapping and touching instances that are difficult to separate accurately.
 
-However, segmentation methods face two fundamental limitations when applied to nuclei in histopathology images. \textbf{Semantic segmentation} assigns a single class label to every pixel, which is sufficient for macro-level area measurements such as overall tissue region delineation or total TIL density estimation. Yet it fails entirely when accurate individual cell counts are required: because touching or overlapping nuclei share contiguous pixel regions, the model merges them into a single connected component, making it impossible to distinguish where one cell ends and another begins. \textbf{Instance segmentation} attempts to address this by separating individual instances, but introduces its own challenges. The \textit{overlap problem} arises because in a two-dimensional projection, a single pixel cannot simultaneously belong to two overlapping objects, forcing mutually exclusive pixel assignments that distort cell morphology at contact boundaries. Additionally, the \textit{computational bottleneck} is significant: the model must classify every foreground and background pixel across potentially massive whole-slide images, making instance segmentation methods such as U-Net \cite{ronneberger2015u} and Mask R-CNN \cite{he2017mask} prohibitively expensive at clinical scale.
+Instance segmentation has emerged as the dominant paradigm for addressing this challenge, owing to its ability to classify individual objects as unique instances \cite{shephard2021simultaneous}. Among instance segmentation approaches, mask-based methods are the preferred choice in the literature \cite{nunes2025survey}. However, mask-based instance segmentation carries notable drawbacks. First, these methods are computationally heavy, typically relying on two-stage architectures or elaborate post-processing pipelines \cite{zhang2020mask}. Second, mask-based representations enforce pixel exclusivity: each pixel can belong to only one segment, which distorts morphology at contact boundaries where cells overlap \cite{eppel2020computer}.
 
-Object detection models offer a lighter alternative. By outputting a fixed set of parameters per object rather than a dense pixel-wise prediction, detection frameworks such as Faster R-CNN \cite{ren2015faster} and YOLO \cite{redmon2016yolo} naturally separate instances, incur lower computational overhead, and excel at counting tasks. However, detection methods suffer from two critical shortcomings. The \textit{boundary problem} is that bounding boxes disregard the geometric boundaries of cells, overestimating cell size and destroying the morphological data necessary for area-based TILs scoring. The \textit{density problem} is that detection models rely on non-maximum suppression (NMS) as a post-processing step to eliminate duplicate predictions, which forces a trade-off where valid overlapping cells in densely clustered regions are frequently suppressed. This is precisely where accurate counting matters most for clinical assessment.
+An alternative line of work is contour-based instance segmentation, which represents objects through their boundary geometry rather than dense pixel masks. Contour-based methods offer two key advantages: they are inherently lighter, often employing single-stage architectures \cite{zhang2020mask}, and they can incorporate geometric priors into the representation prior to training \cite{xie2019polarmask}. Nevertheless, existing contour-based approaches remain dependent on non-maximum suppression (NMS) as a post-processing step, which adds computational overhead and risks removing valid predictions when instances are in close proximity \cite{schmidt2018cell}. Although vision transformer (ViT) based methods can eliminate the NMS dependency, they introduce substantially higher computational cost that limits their practicality.
 
-Some recent methods have attempted to bridge these gaps. StarDist \cite{schmidt2018cell} represents cells as star-convex polygons, preserving boundary shape while maintaining per-cell separation, and HoVer-Net \cite{graham2019hover} uses horizontal and vertical distance maps to separate clustered nuclei. However, both rely on a two-stage pipeline of dense prediction followed by post-processing, and still use NMS, which risks undercounting in the very regions where accuracy matters most. LSP-DETR \cite{pekar2026lsp} addresses the NMS issue by adopting an end-to-end DETR-style framework with learned assignment, eliminating NMS entirely while representing nuclei as star-convex polygons. However, its transformer-based architecture imposes quadratic computational complexity that makes it impractical for resource-constrained edge deployment. CellPose-SAM \cite{stringer2023cellpose} has demonstrated strong generalization for cellular segmentation, though its computational profile is not optimized for real-time inference on edge devices.
-
-No existing method combines polygon-based cell representation with a single-stage, end-to-end fully convolutional network (FCN) detection architecture that eliminates NMS dependency while maintaining the lightweight computational profile necessary for edge deployment. This thesis addresses this gap by proposing \textbf{RayCastED}, a detection model heavily inspired by LSP-DETR \cite{pekar2026lsp} in its use of star-convex polygon predictions within an end-to-end, NMS-free framework, but designed from the ground up with a fully convolutional architecture. RayCastED reframes the star-convex representation as a \textit{raycast} representation, defined by a centroid plus fixed-angle radial rays, integrated directly into a YOLO-based detection head with YOLO's native assignment mechanism. By adopting a purely FCN-based architecture rather than a transformer, RayCastED maintains the lightweight profile needed for edge deployment through TensorRT and ONNX Runtime while remaining end-to-end and NMS-free, thereby combining the morphological accuracy of segmentation with the lightweight efficiency of detection.
+This research proposes, \textbf{RayCastED}, a deep learning model that bridges the gap between these paradigms by combining three desirable properties. \textit{Geometry-awareness:} the model employs ray-prediction based on star-convex polygons to capture true cellular boundaries, enabling precise area and morphological measurements without classifying every pixel. \textit{Lightweight architecture:} the FCN backbone keeps computational overhead low, making the model suitable for edge deployment via TensorRT and ONNX Runtime. \textit{Truly end-to-end:} the architecture completely eliminates the need for NMS or other post-processing, allowing it to natively and accurately resolve dense, highly overlapping cellular scenarios while reducing inference overhead.
 
 \section{Problem Statement}
 
 Based on the background discussed above, the following problems are identified:
 
 \begin{enumerate}
-	\item \textbf{Semantic segmentation merges overlapping cells:} Pixel-wise classification merges touching or overlapping nuclei into a single connected component, making individual cell counts impossible and undermining the per-cell boundary delineation required for area-based TILs scoring.
-
-	\item \textbf{Instance segmentation is computationally prohibitive:} Classifying every foreground and background pixel across massive whole-slide images imposes a computational bottleneck that makes instance segmentation impractical at clinical scale, particularly in resource-constrained environments that require edge deployment.
-
-	\item \textbf{Detection discards boundary geometry:} Bounding box representations disregard cell morphological boundaries, overestimating cell size and destroying the geometric data necessary for area-based scoring, despite detection models offering the lightweight inference profile needed for practical deployment.
-
-	\item \textbf{NMS suppresses valid cells in dense regions:} Non-maximum suppression, used by both detection and polygon-based segmentation methods, systematically deletes valid overlapping predictions in densely clustered regions, precisely where accurate counting matters most for clinical assessment.
-
-	\item \textbf{Transformer-based NMS-free methods are too heavy for edge deployment:} End-to-end frameworks such as LSP-DETR eliminate NMS through learned assignment but rely on transformer architectures with quadratic computational complexity, making them impractical for resource-constrained edge devices.
+	\item Touching or overlapping nuclei introduce computational overhead.\\ 
+	Existing methods address clumped nuclei either through two-stage architectures, heavy post-processing pipelines such as NMS, or computationally expensive vision transformer (ViT) backbones. Each of these strategies imposes a significant computational burden that limits scalability to large WSIs.
+	
+	\item State-of-the-art methods are not suitable for edge deployment\\
+	Current leading approaches to nuclei segmentation and detection are designed with computational assumptions that exceed the capabilities of resource-constrained edge devices. Deploying these models in clinical settings requires hardware that is often unavailable at the point of care.
 \end{enumerate}
 
 \section{Objectives}
@@ -35,13 +29,13 @@ To address the identified problems, this thesis has the following objectives:
 \begin{enumerate}
 	\item Develop \textbf{RayCastED}, a nuclei detection model that:
 	\begin{itemize}
-		\item preserves cell boundary geometry through a raycast polygon representation (centroid plus fixed-angle radial rays), addressing the boundary problem of detection models (Problem 3);
-		\item eliminates dense pixel-wise classification by predicting per-cell polygons directly from a detection head, addressing both the merging issue of semantic segmentation (Problem 1) and the computational bottleneck of instance segmentation (Problem 2);
-		\item replaces NMS with a learned end-to-end assignment mechanism, preventing undercounting in densely clustered regions (Problem 4); and
-		\item operates on an FCN backbone to maintain a lightweight computational profile suitable for edge deployment via TensorRT and ONNX Runtime, avoiding the quadratic complexity of transformer-based methods (Problem 5).
+		\item represents cells through star-convex ray-predictions that capture true geometric boundaries without dense pixel-wise classification, addressing the pixel exclusivity limitation of mask-based methods;
+		\item employs a fully convolutional network (FCN) backbone to maintain a lightweight profile, addressing the computational overhead introduced by two-stage architectures, NMS post-processing, and ViT backbones (Problem 1);
+		\item operates in a truly end-to-end manner without NMS or other post-processing, enabling accurate detection in dense, overlapping cellular regions; and
+		\item is designed for edge deployment through TensorRT and ONNX Runtime compatibility, making it suitable for resource-constrained clinical environments (Problem 2).
 	\end{itemize}
 	\item Evaluate the performance of RayCastED by comparing it against prior nuclei detection and segmentation models on standard benchmarks.
-	\item Evaluate the performance of RayCastED on edge devices.
+	\item Evaluate the deployment feasibility of RayCastED on edge devices.
 \end{enumerate}
 
 \section{Research Scope}
@@ -51,105 +45,32 @@ This research is bounded by the following scope limitations:
 \begin{enumerate}
 	\item \textbf{Data characteristics:} The study uses only H\&E stained histopathology images with approximately 0.25 MPP (microns per pixel) resolution from publicly available secondary datasets. The datasets encompass multiple tissue types/organs.
 	
-	\item \textbf{Computational constraints:} Model evaluation is performed on RTX 5070ti hardware. Baseline comparisons are limited to models compatible with this hardware configuration.
+	\item \textbf{Computational constraints:} Model training is performed on RTX 5070Ti hardware. Baseline comparisons are limited to models compatible with this hardware configuration.
 	
 	\item \textbf{Validation approach:} The research employs computational validation using standard metrics. Pathologist or expert validation is not included in this study.
 	
 	\item \textbf{Technical boundaries:} There are no limitations on nuclei types, sizes, or detection scope. No strict constraints are imposed on input patch sizes or memory usage during model training and inference.
 \end{enumerate}
 
-
-%\noindent \textbf{Contoh penulisan batasan skripsi Teknik Elektro:}
-%
-%%-------------------------------------------------	
-%\noindent\fbox{%
-%	\parbox{\textwidth}{%
-%\begin{enumerate}
-%\item Objek penelitian: Studi efisiensi dan kinerja sistem pemantauan suhu dan arus pada sistem pembangkit tenaga listrik.
-%\item Metode penelitian: Penelitian eksperimental menggunakan analisis simulasi dan pengujian sistem pada skala laboratorium.
-%\item Waktu dan tempat penelitian: Waktu penelitian adalah Maret-Agustus 2022 di 
-%FasLab TTL.
-%\item Populasi dan sampel: Populasi adalah sistem pembangkit tenaga listrik, dan sampel diambil sebanyak 3 sistem yang berbeda.
-%\item Variabel: Variabel bebas adalah metode pemantauan suhu dan arus, dan variabel terikat adalah efisiensi dan kinerja
-%\item Hipotesis: bahwa metode pemantauan suhu dan arus berpengaruh terhadap efisiensi dan kinerja sistem pembangkit tenaga listrik.
-%\item Keterbatasan Penelitian: Keterbatasan penelitian adalah hanya melibatkan 
-%pengujian sistem pada skala laboratorium dan membatasi analisis pada variabel 
-%bebas dan terikat.
-%\end{enumerate}
-%		
-%	}%
-%}
-%
-%%-------------------------------------------------	
-%\newpage
-%
-%\noindent \textbf{Contoh penulisan batasan skripsi Teknik Biomedis:}
-%
-%%-------------------------------------------------	
-%\noindent\fbox{%
-%	\parbox{\textwidth}{%
-%\begin{enumerate}
-%\item Objek Penelitian: Studi efektivitas dan keamanan alat elektromedik seperti pacu jantung.
-%\item Metode Penelitian: Penelitian deskriptif dan observasional menggunakan survei dan analisis data.
-%\item Waktu dan Tempat Penelitian: Waktu penelitian adalah Januari-Juni 2022 di 
-%Rumah Sakit Sarjito. 
-%\item Populasi dan Sampel: Populasi adalah pasien yang menggunakan pacu jantung, dan sampel diambil dengan metode random sampling sebanyak 100 pasien. 
-%\item Variabel: Variabel bebas nya adalah jenis alat pacu jantung, dan variabel terikatnya adalah efektivitas dan keamanan. 
-%\item Hipotesis: bahwa jenis alat pacu jantung berpengaruh terhadap efektivitas dan keamanan. 
-%\item Keterbatasan Penelitian: Keterbatasan penelitian adalah hanya melibatkan satu rumah sakit sebagai lokasi penelitian dan membatasi dalam analisis data hanya pada variabel bebas dan terikat.
-%\end{enumerate}
-%		
-%	}%
-%}
-%
-%%-------------------------------------------------	
-%
-%\newpage
-%
-%\noindent \textbf{Contoh penulisan batasan skripsi Teknologi Informasi:}
-%
-%%-------------------------------------------------	
-%\noindent\fbox{%
-%	\parbox{\textwidth}{%
-%\begin{enumerate}
-%\item Objek Penelitian: Analisis perbandingan efektivitas dan efisiensi antara sistem manajemen proyek tradisional dan sistem manajemen proyek berbasis teknologi informasi. 
-%\item Metode Penelitian: Penelitian kualitatif dengan menggunakan wawancara dan 
-%survei terhadap para pelaku proyek di berbagai perusahaan. 
-%\item Waktu dan Tempat Penelitian: Waktu penelitian adalah Januari-Juni 2022 di 
-%perusahaan-perusahaan di wilayah Bantul. 
-%\item Populasi dan Sampel: Populasi nya adalah perusahaan yang melakukan proyek, dan sampel diambil sebanyak 10 perusahaan yang menerapkan sistem manajemen 
-%proyek tradisional dan 10 perusahaan yang menggunakan sistem manajemen 
-%proyek berbasis teknologi informasi. 
-%\item Variabel: Variabel bebasnya adalah sistem manajemen proyek, dan variabel 
-%terikatnya adalah efektivitas dan efisiensi. 
-%\item Hipotesis: bahwa sistem manajemen proyek berbasis teknologi informasi lebih efektif dan efisien dibandingkan dengan sistem manajemen proyek tradisional.
-%\item Keterbatasan Penelitian: Keterbatasan penelitian adalah penelitian hanya dilakukan pada perusahaan di wilayah Bantul dan hanya melibatkan wawancara dan survei sebagai metode pengumpulan data.
-%\end{enumerate}
-%		
-%	}%
-%}
-
 \section{Research Novelty}
 
-The novelty of this research lies in the development of RayCastED, which represents the first architecture that combines three key elements: (1) a raycast polygon representation for preserving cell boundary geometry without dense pixel-wise classification, (2) an FCN backbone for maintaining the lightweight computational profile required for edge deployment, and (3) an end-to-end learned assignment mechanism that eliminates NMS dependency. This unique combination bridges the gap between the morphological accuracy of segmentation and the lightweight efficiency of detection for nuclei analysis in histopathology images.
+The novelty of this research lies in the development of RayCastED, which proposes a deep learning architecture combining three elements: (1) a star-convex polygon representation that captures cell boundary geometry without dense pixel-wise classification, (2) a fully convolutional network backbone that maintains a lightweight computational profile suitable for edge deployment, and (3) a truly end-to-end design that eliminates NMS dependency entirely. This unique combination bridges the gap between the morphological accuracy of contour-based segmentation and the lightweight efficiency of single-shot detection for nuclei analysis in histopathology images.
 
 \section{Research Contributions}
 
 The contributions of this research are as follows:
 
 \begin{enumerate}
-	\item \textbf{RayCastED model implementation:} A complete implementation of the proposed polygon-based detection model with raycast representation, integrated into a YOLO-based detection head with end-to-end assignment mechanism.
+	\item \textbf{RayCastED model implementation:} A complete implementation of the proposed star-convex polygon-based detection model with raycast representation and end-to-end training, built on a fully convolutional backbone.
 
-	\item \textbf{Performance benchmarks on standard datasets:} Comprehensive evaluation of RayCastED on publicly available histopathology datasets, comparing performance against baseline models including semantic segmentation, instance segmentation, object detection, and transformer-based approaches.
+	\item \textbf{Performance benchmarks on standard datasets:} Comprehensive evaluation of RayCastED on publicly available histopathology datasets, comparing performance against baseline models including mask-based instance segmentation, contour-based methods, and transformer-based approaches.
 
 	\item \textbf{Edge deployment validation:} Validation of RayCastED's deployment capabilities on edge devices through TensorRT and ONNX Runtime conversion, demonstrating practical feasibility for resource-constrained clinical environments.
 
-	\item \textbf{Comparison against baseline models:} Systematic comparison with prior nuclei detection and segmentation methods to quantify improvements in boundary accuracy, cell counting in dense regions, and computational efficiency.
+	\item \textbf{Systematic comparison against baselines:} Quantitative comparison with prior nuclei detection and segmentation methods to measure improvements in boundary accuracy, counting precision in dense regions, and computational efficiency.
 
 	\item \textbf{Reproducible codebase:} A publicly available, well-documented implementation that enables reproducibility and provides a foundation for future research in polygon-based detection for computational pathology.
 \end{enumerate}
-
-
 
 \section{Presentation Structure}
 

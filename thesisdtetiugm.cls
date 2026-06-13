@@ -789,6 +789,7 @@
 \renewcommand \thechapter {\@Roman\c@chapter}
 \renewcommand \thesection {\@arabic\c@chapter.\@arabic\c@section}
 \renewcommand\thesubsection {\@arabic\c@chapter.\@arabic\c@section.\@arabic\c@subsection}
+\newcommand\thesubsubsubsection {\thesubsubsection.\@arabic\c@subsubsubsection}
 
 % set figure, table, and equation style
 \@addtoreset {equation}{chapter}
@@ -807,6 +808,13 @@
 \titleformat*{\section}{\raggedright\normalfont\normalsize\bfseries}
 \titleformat*{\subsection}{\raggedright\normalfont\normalsize\bfseries}
 \titleformat*{\subsubsection}{\raggedright\normalfont\normalsize\bfseries}
+
+% Define \subsubsubsection (level between \subsubsection and \paragraph)
+\newcounter{subsubsubsection}[subsubsection]
+\titleclass{\subsubsubsection}{straight}[\subsubsection]
+\titleformat{\subsubsubsection}{\raggedright\normalfont\normalsize\bfseries}{\thesubsubsubsection}{1em}{}
+\titlespacing{\subsubsubsection}{0pt}{12pt plus 4pt minus 2pt}{0pt plus 2pt minus 2pt}
+
 \titleformat{\paragraph}[hang]{\raggedright\normalfont\normalsize\bfseries}{}{0pt}{}
 \titlespacing{\paragraph}{0pt}{12pt plus 4pt minus 2pt}{6pt plus 2pt minus 2pt}
 
