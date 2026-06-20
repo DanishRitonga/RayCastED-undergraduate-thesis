@@ -1,0 +1,18 @@
+\begin{table}[H]
+	\centering
+	\caption{Ablation study on the number of rays $R$. All experiments use RayCastED-B with identical hyperparameters except $R$. Best per column in \textbf{bold}.}
+	\label{tab:ablation-rays}
+	\small
+	\begin{tabular}{lcccccc}
+		\hline
+		\textbf{$R$} & \textbf{AJI} & \textbf{bPQ} & \textbf{mPQ} & \textbf{F1} & \textbf{Precision} & \textbf{Recall} \\
+		\hline
+		 8 & 0.5646 & 0.5902 & 0.4394 & 0.7373 & 0.7334 & \textbf{0.7412} \\
+		16 & 0.5749 & 0.6019 & \textbf{0.4606} & 0.7387 & 0.7393 & 0.7381 \\
+		32 & \textbf{0.5759} & \textbf{0.6040} & 0.4533 & 0.7396 & \textbf{0.7455} & 0.7339 \\
+		64 & 0.5715 & 0.6024 & 0.4526 & \textbf{0.7409} & 0.7419 & 0.7400 \\
+		\hline
+		STD & 0.0051 & 0.0063 & 0.0088 & 0.0015 & 0.0051 & 0.0032 \\
+		\hline
+	\end{tabular}
+\end{table}

@@ -1,0 +1,22 @@
+\begin{table}[H]
+	\centering
+	\caption{Per-nuclei-type precision, recall, and F1-score on the PanNuke test set. Nuclei types follow the PanNuke five-class taxonomy. CellPose-SAM does not provide nuclei classification. The best value in each column is shown in \textbf{bold}.}
+	\label{tab:per-type}
+	\small
+	\resizebox{\textwidth}{!}{%
+	\begin{tabular}{l>{\columncolor{blue!7}}c >{\columncolor{green!7}}c >{\columncolor{gray!10}}c >{\columncolor{blue!7}}c >{\columncolor{green!7}}c >{\columncolor{gray!10}}c >{\columncolor{blue!7}}c >{\columncolor{green!7}}c >{\columncolor{gray!10}}c >{\columncolor{blue!7}}c >{\columncolor{green!7}}c >{\columncolor{gray!10}}c >{\columncolor{blue!7}}c >{\columncolor{green!7}}c >{\columncolor{gray!10}}c}
+		\hline
+		& \multicolumn{3}{c}{\textbf{Neoplastic}} & \multicolumn{3}{c}{\textbf{Inflammatory}} & \multicolumn{3}{c}{\textbf{Connective}} & \multicolumn{3}{c}{\textbf{Necrosis}} & \multicolumn{3}{c}{\textbf{Epithelial}} \\
+		\textbf{Method} & \textbf{P} & \textbf{R} & \textbf{F1} & \textbf{P} & \textbf{R} & \textbf{F1} & \textbf{P} & \textbf{R} & \textbf{F1} & \textbf{P} & \textbf{R} & \textbf{F1} & \textbf{P} & \textbf{R} & \textbf{F1} \\
+		\hline
+		StarDist      & 0.6213 & 0.5998 & 0.6104 & 0.5857 & 0.5431 & 0.5636 & 0.5719 & 0.4009 & 0.4714 & 0.3333 & 0.0009 & 0.0019 & 0.4326 & 0.2998 & 0.3541 \\
+		CellPose-SAM  & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+		LKCell        & 0.7285 & \textbf{0.7167} & \textbf{0.7225} & \textbf{0.7090} & \textbf{0.6603} & \textbf{0.6838} & 0.6067 & \textbf{0.6002} & \textbf{0.6034} & 0.4497 & 0.3340 & 0.3833 & 0.7019 & \textbf{0.7459} & 0.7232 \\
+		HoVer-NeXt    & \textbf{0.7372} & 0.6566 & 0.6946 & 0.6932 & 0.6392 & 0.6651 & \textbf{0.6207} & 0.5722 & 0.5955 & \textbf{0.4750} & 0.3595 & \textbf{0.4093} & \textbf{0.7630} & 0.6909 & \textbf{0.7252} \\
+		RayCastED-S   & 0.6775 & 0.6441 & 0.6604 & 0.5546 & 0.6009 & 0.5768 & 0.5105 & 0.5053 & 0.5079 & 0.3826 & \textbf{0.4062} & 0.3940 & 0.6000 & 0.6628 & 0.6298 \\
+		RayCastED-B   & 0.6825 & 0.6718 & 0.6771 & 0.5751 & 0.5947 & 0.5848 & 0.5318 & 0.5322 & 0.5320 & 0.3919 & 0.3927 & 0.3923 & 0.6615 & 0.6534 & 0.6574 \\
+		RayCastED-L   & 0.7329 & 0.6558 & 0.6922 & 0.6609 & 0.5907 & 0.6239 & 0.6029 & 0.5086 & 0.5518 & 0.4470 & 0.3532 & 0.3946 & 0.7339 & 0.6540 & 0.6916 \\
+		\hline
+	\end{tabular}%
+	}
+\end{table}

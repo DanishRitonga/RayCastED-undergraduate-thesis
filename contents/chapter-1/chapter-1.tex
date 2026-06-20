@@ -27,14 +27,7 @@ Based on the background discussed above, the following problems are identified:
 To address the identified problems, this thesis has the following objectives:
 
 \begin{enumerate}
-	\item Develop \textbf{RayCastED}, a nuclei detection model that:
-	\begin{itemize}
-		\item represents cells through star-convex ray-predictions that capture true geometric boundaries without dense pixel-wise classification, addressing the pixel exclusivity limitation of mask-based methods;
-		\item employs a fully convolutional network (FCN) backbone to maintain a lightweight profile, addressing the computational overhead introduced by two-stage architectures, NMS post-processing, and ViT backbones (Problem 1);
-		\item operates in a truly end-to-end manner without NMS or other post-processing, enabling accurate detection in dense, overlapping cellular regions; and
-		\item is designed for edge deployment through TensorRT and ONNX Runtime compatibility, making it suitable for resource-constrained clinical environments (Problem 2).
-	\end{itemize}
-	\item Evaluate the performance of RayCastED by comparing it against prior nuclei detection and segmentation models on standard benchmarks.
+	\item Develop \textbf{RayCastED} and evaluate the performance by comparing it against prior nuclei instance segmentation models.
 	\item Evaluate the deployment feasibility of RayCastED on edge devices.
 \end{enumerate}
 
@@ -51,10 +44,6 @@ This research is bounded by the following scope limitations:
 	
 	\item \textbf{Technical boundaries:} There are no limitations on nuclei types, sizes, or detection scope. No strict constraints are imposed on input patch sizes or memory usage during model training and inference.
 \end{enumerate}
-
-\section{Research Novelty}
-
-The novelty of this research lies in the development of RayCastED, which proposes a deep learning architecture combining three elements: (1) a star-convex polygon representation that captures cell boundary geometry without dense pixel-wise classification, (2) a fully convolutional network backbone that maintains a lightweight computational profile suitable for edge deployment, and (3) a truly end-to-end design that eliminates NMS dependency entirely. This unique combination bridges the gap between the morphological accuracy of contour-based segmentation and the lightweight efficiency of single-shot detection for nuclei analysis in histopathology images.
 
 \section{Research Contributions}
 
@@ -74,6 +63,4 @@ The contributions of this research are as follows:
 
 \section{Presentation Structure}
 
-Sistematika penulisan berisi pembahasan apa yang akan ditulis di setiap bab. 
-Sistematika pada umumnya berupa paragraf yang setiap paragraf mencerminkan 
-bahasan setiap Bab. Bagian ini akan ditulis setelah seluruh bab dalam skripsi ini selesai disusun.
+This thesis is organized into five chapters. Chapter~1 introduces the background, problem statement, objectives, and scope of the research. Chapter~2 reviews the literature on nuclei instance segmentation paradigms, the theoretical foundations of the proposed model components, and the evaluation metrics used throughout this work. Chapter~3 describes the methodology, covering datasets, the RayCast representation, the data pre-processing pipeline, the proposed model architecture components, and the training strategy. Chapter~4 presents the experimental results, including the RayCast representation validation, benchmarking against prior methods, edge deployment evaluation, and ablation studies. Chapter~5 concludes the thesis with a summary of findings and directions for future work.

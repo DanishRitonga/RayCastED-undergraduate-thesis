@@ -1,33 +1,122 @@
-\chapter{Hasil dan Pembahasan}
+\chapter{Results and Discussion}
 
-\input{contents/chapter-4/tab/eval}
+This chapter presents the experimental evaluation of RayCastED across the research objectives outlined in Chapter~1. 
+The experiments are designed to assess both detection accuracy and computational efficiency, covering the RayCast
+representation fidelity, full benchmarking against state-of-the-art methods, cross-dataset generalization, and edge
+deployment feasibility.
+
+\section{Performance Evaluation}
+\label{sec:performance-evaluation}
+
+We first validate the RayCast representation itself, then benchmark RayCastED against prior methods, and finally
+test generalization to unseen datasets.
+
+\subsection{RayCast Representation Validation}
+\label{sec:raycast-validation}
+
+To assess how faithfully the ray-cast polygon approximates the ground truth mask, we compute the mask IoU between
+the original segmentation and the polygon reconstructed from $R$ equally-spaced rays. Table~\ref{tab:raycast-iou}
+reports the per-tissue IoU for $R \in \{8, 16, 32, 64\}$ across the five organ types in PanNuke.
+
+\input{contents/chapter-4/tab/raycast-iou}
+
+As expected, increasing $R$ produces tighter approximations. The gain from $R=16$ to $R=32$ (Mean IoU $+0.0199$, Max $+0.0205$) is substantial, while the further increase to $R=64$ yields only incremental improvement (Mean $+0.0069$, Max $+0.0034$), indicating diminishing returns beyond 32 rays. Although $R=32$ offers the best efficiency--accuracy trade-off, $R=64$ is used as the default in all subsequent experiments to maximize boundary fidelity without a significant computational penalty.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\textwidth]{contents/chapter-4/fig/Ray_val.pdf}
+	\caption{Visual comparison of ground truth nucleus mask and ray-cast polygon reconstruction at $R=8, 16, 32, 64$.}
+	\label{fig:raycast-visual}
+\end{figure}
+
+\newpage
+\subsection{RayCastED Benchmarking Results}
+\label{sec:benchmarking}
+
+We compare RayCastED against four prior methods on the PanNuke test set. All models are evaluated under the same
+protocol on a held-out set of 4,716 nuclei across 79 images. Table~\ref{tab:benchmark} reports detection and
+segmentation accuracy, while Table~\ref{tab:benchmark-efficiency} reports model complexity and inference speed.
+
+\input{contents/chapter-4/tab/benchmark}
+
+CellPose-SAM and LKCell dominate the accuracy rankings, which is expected given their model complexity: as shown in Table~\ref{tab:benchmark-efficiency}, both operate at parameter counts and GFLOPs well above the RayCastED family, with super-linear time complexity in LKCell. RayCastED nonetheless delivers competitive performance. In particular, RayCastED-L achieves metrics within 10\% of the best result in every column while requiring a fraction of the parameters and GFLOPs and scaling with linear time complexity.
+
+\input{contents/chapter-4/tab/benchmark-efficiency}
+
+RayCastED achieves linear time complexity as a direct consequence of its post-processing-free design: without NMS or watershed, inference scales proportionally to the number of anchor positions rather than the number of detected objects. Since the anchor grid is fixed by input resolution and stride, this complexity is image-size agnostic -- the model accepts arbitrarily sized inputs without a super-linear increase in cost, enabling throughput-consistent deployment across varying tile dimensions.
 
 
-Berikut ini adalah yang perlu diperhatikan untuk mengisi bab hasil dan pembahasan:
+To provide deeper insight, we also break down the results by tissue type (Table~\ref{tab:per-tissue}) and by
+nuclei type (Table~\ref{tab:per-type}).
 
-\begin{enumerate}
-	\item Setiap rumusan masalah boleh memiliki lebih dari 1 tujuan.
-	\item Setiap subbab harus spesifik menjawab setiap tujuan yang dituliskan.
-	\item Setiap rumusan masalah boleh dijawab dengan 1 subbab atau lebih.
-\end{enumerate}
+\input{contents/chapter-4/tab/per-tissue}
 
-Berikut ini adalah contoh sub bab untuk menjelaskan tujuan penelitian.
+The per-tissue breakdown reveals a nuanced picture beyond the global metrics. LKCell remains the strongest model across most organ types, with HoVer-NeXt occasionally taking the lead on Skin, Stomach, Kidney, and Pancreatic. Notably, RayCastED-L achieves the best mPQ on Uterus (0.4892) despite having only 10.3M parameters. More importantly, RayCastED-L exhibits the lowest standard deviation in per-tissue mPQ (0.0494), indicating the most consistent panoptic quality across heterogeneous organ types -- a critical property for deployment on multi-organ pathology workflows where unpredictable tissue variation is the norm.
 
-\section{Pembahasan Tujuan 1 dengan Hasil Penelitian 1 (Ubah Judul Sesuai dengan Hal yang Hendak dibahas)}
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\textwidth]{contents/chapter-4/fig/visual-tissue.pdf}
+	\caption{RayCastED-B predictions across the 19 PanNuke tissue types.}
+	\label{fig:visual-tissue}
+\end{figure}
 
-Sub bab pertama adalah membahas tujuan penelitian pertama dengan hasil penelitian ke-1. 
-Dapat ditambahkan beberapa sub bab jika diperlukan.
+\input{contents/chapter-4/tab/per-type}
 
-\section{Pembahasan Tujuan 1 dengan Hasil Penelitian 2 (Ubah Judul Sesuai dengan Hal yang Hendak dibahas)}
+The per-type analysis follows a similar pattern: LKCell dominates across most nuclear categories, with HoVer-NeXt claiming occasional wins on Epithelial and Necrosis F1. A surprising result emerges in the Necrosis category, where the RayCastED family consistently achieves the highest recall despite having an order of magnitude fewer parameters. This suggests that the split classification head and the hierarchical multi-objective loss provide an advantage for detecting rare minority classes that are often under-represented in the training data.
 
-Sub bab kedua adalah membahas tujuan penelitian pertama dengan hasil penelitian ke-2. Sub bab ini merupakan contoh tambahan sub bab pertama.
+\subsection{Generalization Test}
+\label{sec:generalization}
 
-\section{Pembahasan Tujuan 2 dengan Hasil Penelitian 3 (Ubah Judul Sesuai dengan Hal yang Hendak dibahas)}
+To evaluate cross-dataset generalization without fine-tuning, we apply the PanNuke-trained RayCastED-B directly to
+MoNuSAC, panopTILs, and PUMA. Table~\ref{tab:generalization} reports the zero-shot performance in terms of AJI,
+bPQ, and F1.
 
-Sub bab ketiga adalah membahas tujuan penelitian kedua. Dapat ditambahkan beberapa sub bab jika diperlukan.
+\input{contents/chapter-4/tab/generalization}
 
-\section{Perbandingan Hasil Penelitian dengan Hasil Terdahulu}
+RayCastED-B generalizes well to PUMA, achieving performance comparable to the in-domain PanNuke results. For panopTILs and MoNuSAC, however, the zero-shot performance indicates that domain-specific retraining is necessary to bridge the distribution gap. In general, fine-tuning or retraining RayCastED on the target dataset is recommended for optimal performance in a new clinical domain.
 
-Pembahasan penutup dapat menjelaskan mengenai kelebihan hasil pengembangan / 
-penelitian dan kekurangan dibandingkan dengan skripsi atau penelitian terdahulu atau
-perbandingan terhadap produk lain yang ada di pasaran. Penulis dapat menggunakan tabel untuk membandingkan secara gamblang dan menjelaskannya.
+\section{Edge Deployment Evaluation}
+\label{sec:edge-deployment}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\textwidth]{contents/chapter-4/fig/visual-edge.pdf}
+	\caption{Comparison of edge deployment output across platforms.}
+	\label{fig:visual-edge}
+\end{figure}
+
+To assess the practicality of RayCastED for clinical deployment on resource-constrained hardware, we benchmark the
+smallest variant (RayCastED-S) on two platforms: a desktop GPU (RTX 5070 Ti) and an embedded AI accelerator
+(Jetson Orin Nano). Table~\ref{tab:edge} compares accuracy and throughput across five configurations.
+
+\input{contents/chapter-4/tab/edge}
+
+The PyTorch baseline on the RTX 5070 Ti achieves near-exact predicted nuclei counts, confirming that the end-to-end inference pipeline operates correctly. When compiled with TensorRT, the RTX 5070 Ti reaches a per-image latency of 2.70~ms, representing a substantial speedup over PyTorch. Unexpectedly, TensorRT deployment on the Jetson Orin Nano yields consistently higher AJI, bPQ, and mPQ than the desktop GPU across both FP16 and TF32 configurations. This is unlikely to stem from reduced precision, since TF32 and FP16 produce near-identical metrics. A plausible explanation is that TensorRT's aggressive graph-level optimizations for the Jetson target architecture restructure the operator execution order in a way that benefits the model numerically. The absence of such gains on the older RTX 2080 Super (similarly running TensorRT) supports the hypothesis that the effect is architecture-specific rather than a universal property of engine compilation.
+
+\section{Ablation Study}
+\label{sec:ablation}
+
+To isolate the contribution of key design choices, we conduct two controlled experiments using
+RayCastED-B as the base configuration.
+
+\subsection{Study on Number of Rays}
+\label{sec:ablation-rays}
+
+We vary the number of rays $R$ while keeping all other hyperparameters fixed, measuring
+both detection accuracy and polygon fidelity. Table~\ref{tab:ablation-rays} reports the
+results for $R \in \{8, 16, 32, 64\}$.
+
+\input{contents/chapter-4/tab/ablation-rays}
+
+Surprisingly, increasing the number of rays from $R=8$ to $R=64$ yields only a modest overall performance improvement. The most notable gain occurs in mPQ, suggesting that the angular resolution of the ray representation primarily affects how the model resolves individual nuclei instances rather than detection accuracy. Beyond $R=16$, the returns diminish, with $R=32$ and $R=64$ producing nearly indistinguishable results. Additionally, the standard deviations across all ray configurations do not differ significantly, indicating that the ray count has minimal influence on prediction consistency. This however contrasts with the representation-level results in Table~\ref{tab:raycast-iou}, where increasing the ray count from $R=8$ to $R=64$ substantially improved mask IoU at the geometric level. The fact that this geometric improvement does not proportionally translate to model performance reveals a current limitation: the network is not able to exploit the higher angular precision offered by denser ray configurations.
+
+\subsection{Study on Different Wavelet}
+\label{sec:ablation-wavelet}
+
+We compare the Haar wavelet used in ResoConv against alternative wavelet families and a
+strided-convolution baseline. Table~\ref{tab:ablation-wavelet} reports detection and
+segmentation metrics for each configuration.
+
+\input{contents/chapter-4/tab/ablation-wavelet}
+
+The best performance consistently comes from the Haar (db1) wavelet. Increasing the number of filter taps (db2, db4) introduces feature smoothing that attenuates the fine-grained edges, chromatin texture, and boundary transitions that distinguish individual nuclei. This smoothing removes discriminative high-frequency content essential for accurate detection and segmentation, resulting in regressed performance on all metrics.

@@ -1,0 +1,19 @@
+\begin{table}[H]
+	\centering
+	\caption{Model complexity and time complexity benchmarking. Best overall is shown in \textbf{bold}.}
+	\label{tab:benchmark-efficiency}
+	\small
+	\begin{tabular}{lccc}
+		\hline
+		\textbf{Method} & \textbf{Params} & \textbf{GFLOPs} & \textbf{Time Complexity} \\
+		\hline
+		StarDist      & 1.46M     & 8.14   & $O(n + k^2)$ \\
+		CellPose-SAM  & $\sim$305M & 724   & $O(n^2)$ \\
+		LKCell        & 163.8M    & 47.86  & $O(n \log n + kn)$ \\
+		HoVer-NeXt    & 36M       & 24     & $O(n \log n + kn)$ \\
+		RayCastED-S   & \textbf{0.81M}  & \textbf{1.38}  & $O(n)$ \\
+		RayCastED-B   & 2.6M      & 5.52   & $O(n)$ \\
+		RayCastED-L   & 9.44M     & 12.42  & $O(n)$ \\
+		\hline
+	\end{tabular}
+\end{table}

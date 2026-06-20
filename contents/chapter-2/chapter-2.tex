@@ -1,51 +1,70 @@
-\chapter{Tinjauan Pustaka dan Dasar Teori}
+\chapter{Literature Review and Theoretical Basis}
 
 \section{Literature Review}
 
-This section reviews prior work on nuclei instance segmentation in histopathology images, focusing on the methods most relevant to the proposed RayCastED model.
+\subsection{State-of-the-Art Literature Review}
 
-\subsection{StarDist}
+Table~\ref{tab:literature-review} summarizes the key prior works most relevant to the proposed RayCastED model.
 
-StarDist \cite{schmidt2018cell} introduced the star-convex polygon representation for cell detection, originally developed for fluorescence microscopy and later adapted to histopathology images \cite{weigert2022stardist}. StarDist predicts a set of radial distances from each cell centroid to its boundary at fixed angular intervals, producing a star-convex polygon that preserves boundary geometry. However, StarDist relies on a two-stage pipeline: it first generates a dense probability map and then applies non-maximum suppression (NMS) to filter overlapping predictions, which risks undercounting in densely clumped regions and introduces computational overhead from post-processing.
-
-\subsection{CPP-Net}
-
-CPP-Net \cite{chen2023cppnet} proposed a context-aware polygon proposal network for nuclei instance segmentation. Rather than regressing radial distances from a fixed grid, CPP-Net generates polygon proposals by learning to predict polygon vertices directly, using a context-aware module that aggregates multi-scale features to refine proposal quality. While CPP-Net demonstrates that polygon-based representations can achieve high segmentation accuracy, it operates within a dense prediction framework and relies on NMS-based post-processing to remove duplicate proposals, inheriting the same NMS dependency as StarDist.
-
-\subsection{HoVer-NeXt}
-
-HoVer-NeXt \cite{baumann2024hovernext} extended the HoVer-Net \cite{graham2019hover} framework for nuclei segmentation and classification, optimizing it for computational efficiency in large-scale histopathology applications. HoVer-Net predicts horizontal and vertical distance maps from each pixel to the centroids of neighboring cells, which are then used to separate touching or overlapping instances through post-processing. HoVer-NeXt improves upon this pipeline with architectural refinements that reduce inference time while maintaining segmentation quality. However, the method remains fundamentally a dense segmentation approach that classifies every pixel and requires computationally expensive post-processing (watershed algorithms and morphological operations) to extract individual instance masks.
-
-\subsection{CellPose}
-
-CellPose \cite{stringer2020cellpose} introduced a generalist framework for cellular segmentation that predicts a gradient flow field pointing from each pixel toward the nearest cell centroid, combined with a cell probability map. Trained on a diverse dataset of over 70,000 segmented objects across multiple image types, CellPose demonstrates strong cross-domain generalization without requiring model retraining. However, CellPose operates as a dense segmentation model that classifies every pixel, making it computationally expensive for whole-slide analysis. A subsequent extension, CellPose-SAM \cite{stringer2025cellposesam}, combined CellPose with the Segment Anything Model (SAM) to achieve superhuman generalization, though the computational profile remains unsuitable for resource-constrained deployment.
-
-\subsection{LSP-DETR}
-
-LSP-DETR \cite{pekar2026lsp} represents the most direct precursor to this work. It introduced a fully end-to-end framework for nuclei segmentation that represents nuclei as star-convex polygons within a DETR-style transformer architecture. By using a learned bipartite assignment mechanism instead of NMS, LSP-DETR eliminates the undercounting problem in clumped regions. The authors also proposed a novel radial distance loss that allows overlapping nuclei segmentation to emerge naturally. LSP-DETR demonstrated strong generalization across tissues and was over five times faster than the next-fastest leading method. However, its transformer-based backbone imposes quadratic complexity, making it computationally demanding for edge deployment. RayCastED is heavily inspired by LSP-DETR's use of star-convex polygon predictions within an end-to-end, NMS-free framework, but is designed from the ground up with a fully convolutional architecture to maintain a lightweight computational profile suitable for resource-constrained environments.
-
-Table~\ref{tab:literature-comparison} summarizes the key characteristics of the reviewed methods, highlighting how each method addresses (or fails to address) the core challenges identified in the background.
-
-\begin{table}[htbp]
-	\centering
-	\caption{Comparison of prior nuclei detection and segmentation methods. The \textbf{Fully Convolutional} column indicates whether the method uses a pure FCN backbone (no transformer or attention-based components).}
-	\label{tab:literature-comparison}
-	\resizebox{\textwidth}{!}{%
-	\begin{tabular}{lcccl}
+{\centering
+\begin{longtable}{l c c l >{\footnotesize}p{0.28\textwidth}}
+	\caption{Literature review of prior nuclei instance segmentation and detection methods.}
+	\label{tab:literature-review} \\
+	\hline
+	\textbf{Method} & \textbf{Year} & \textbf{Author} & \textbf{Approach} & \textbf{Mechanism} \\
+	\hline
+	\endfirsthead
+	\multicolumn{5}{c}{\textit{Table \thetable{} -- continued from previous page}} \\
+	\hline
+	\textbf{Method} & \textbf{Year} & \textbf{Author} & \textbf{Approach} & \textbf{Mechanism} \\
+	\hline
+	\endhead
+	\hline
+	\multicolumn{5}{r}{\textit{Continued on next page}} \\
+	\endfoot
+	\hline
+	\endlastfoot
+		StarDist \cite{schmidt2018cell, weigert2022stardist}
+			& 2018 & Schmidt et al.
+			& contour-based
+			& Star-convex polygon; predicts radial distances from centroid to boundary at fixed angular intervals; NMS post-processing \\
+		SplineDist \cite{mandal2020splinedist}
+			& 2020 & Mandal \& Uhlmann
+			& contour-based
+			& B-spline control points for cell boundary contours; infers cell shape from radial distances and fits splines; requires centroid-anchored patches; watershed or connected-components post-processing \\
+		TSFD-Net \cite{ilyas2022tsfd}
+			& 2022 & Ilyas et al.
+			& mask-based
+			& Tissue-specific feature distillation backbone extracts morphological features varying by tissue type; BiFPN generates hierarchical feature pyramid; interlinked decoders jointly optimize and fuse features; combinational loss for joint nuclei segmentation and classification; NMS post-processing \\
+		CPP-Net \cite{chen2023cppnet}
+			& 2023 & Chen et al.
+			& contour-based
+			& Context-aware polygon proposal network; predicts polygon vertices directly with multi-scale feature aggregation; NMS post-processing \\
+		CellViT \cite{horst2023cellvit}
+			& 2023 & Hörst et al.
+			& mask-based
+			& Vision Transformer encoder pre-trained on 104M histological image patches; leverages Segment Anything Model foundational architecture; transformer-based segmentation decoder; predicts cell probability, distance maps, and class labels; watershed post-processing \\
+		HoVer-NeXt \cite{baumann2024hovernext, graham2019hover}
+			& 2024 & Baumann et al.
+			& mask-based
+			& Horizontal/vertical distance maps from each pixel to neighboring centroids; watershed + morphological post-processing for instance separation \\
+		LKCell \cite{cui2024lkcell}
+			& 2024 & Cui et al.
+			& mask-based
+			& Large convolution kernels for computationally efficient receptive fields; transfers pre-trained large-kernel CNN to medical domain; single decoder with NP/HV/NT multitask output heads; watershed post-processing \\
+		CellPose \cite{stringer2020cellpose, stringer2025cellposesam}
+			& 2020 & Stringer et al.
+			& mask-based
+			& Gradient flow field pointing toward cell centroids combined with cell probability map; flow-field post-processing \\
 		\hline
-		\textbf{Method} & \textbf{Approach} & \textbf{End-to-End} & \textbf{Fully Convolutional} & \textbf{Post-processing} \\
-		\hline
-		StarDist \cite{schmidt2018cell, weigert2022stardist} & Detection & $\times$ & $\checkmark$ & NMS \\
-		CPP-Net \cite{chen2023cppnet} & Instance Seg. & $\times$ & $\checkmark$ & NMS \\
-		HoVer-NeXt \cite{baumann2024hovernext, graham2019hover} & Instance Seg. & $\times$ & $\checkmark$ & Watershed + Morphological \\
-		CellPose \cite{stringer2020cellpose, stringer2025cellposesam} & Instance Seg. & $\times$ & $\checkmark$ & NMS \\
-		LSP-DETR \cite{pekar2026lsp} & Detection & $\checkmark$ & $\times$ & None \\
-		\hline
-	\end{tabular}%
-	}
-\end{table}
+\end{longtable}
+}
 
-As Table~\ref{tab:literature-comparison} shows, no existing method simultaneously achieves all three properties: end-to-end detection, polygon-based boundary representation, and a fully convolutional architecture. StarDist, CPP-Net, HoVer-NeXt, and CellPose all rely on FCN backbones but require handcrafted post-processing. LSP-DETR is end-to-end through bipartite matching but relies on a transformer backbone. RayCastED is designed to fill this gap by combining the end-to-end bipartite assignment of LSP-DETR with a purely FCN-based architecture.
+\subsection{Research Gap and Novelty}
+
+The novelty of this research lies in the development of RayCastED, which proposes a deep learning architecture combining three elements: (1) a star-convex polygon representation that captures cell boundary geometry without dense pixel-wise classification, (2) a fully convolutional network backbone that maintains a lightweight computational profile suitable for edge deployment, and (3) a truly end-to-end design that eliminates NMS dependency entirely.
+
+As summarized in Table~\ref{tab:literature-review}, all eight prior methods share two key limitations: they rely on dense per-pixel prediction and require handcrafted post-processing (NMS, watershed, or flow-field) to produce final instance masks. RayCastED addresses this gap by providing end-to-end, NMS-free nuclei detection with a lightweight fully convolutional architecture, bridging the morphological accuracy of contour-based segmentation with the computational efficiency of single-shot detection for nuclei analysis in histopathology images.
 
 \section{Theoretical Basis}
 
@@ -64,40 +83,6 @@ This near-ubiquitous convexity has an important implication for automated repres
 \subsubsection{The Overlapping Nuclei Problem}
 
 A fundamental challenge in nuclei analysis is that nuclei in tissue sections are densely packed and frequently overlap, forming clumped clusters where individual boundaries are difficult to distinguish even for expert pathologists. This overlapping occurs because tissue sections are typically cut at a thickness of 3--5 $\mu$m, which is comparable to or smaller than the diameter of many nuclei (typically 5--10 $\mu$m). As a result, multiple nuclei at different depths within the section are projected onto the same 2D image plane, creating the appearance of clumped or touching nuclei. This is not merely an artifact of imaging resolution but an inherent property of projecting 3D tissue architecture onto a 2D plane, motivating the development of automated methods capable of both accurately delineating individual nuclear boundaries and correctly separating touching or overlapping nuclei.
-
-\subsubsection{Area-based Measurements}
-
-Tumor-infiltrating lymphocytes (TILs) are immune cells, primarily lymphocytes and plasma cells, that have migrated into the tumor microenvironment. The presence and density of TILs reflect the host immune response against the tumor and have been established as a prognostic biomarker in multiple cancer types. Higher TILs levels are generally associated with improved outcomes, particularly in triple-negative and HER2-positive breast cancers, where they predict better response to chemotherapy and longer survival.
-
-The International TILs Working Group, convened by Salgado et al. \cite{salgado2015evaluation}, established standardized guidelines for TILs assessment in clinical practice. The recommended metric is \textbf{stromal TILs (sTILs)}, defined as the proportion of stromal area occupied by mononuclear inflammatory cells within the invasive tumor border:
-
-\begin{equation}
-	\text{sTILs (\%)} = \frac{\text{Area of mononuclear inflammatory cells in stroma}}{\text{Total intratumoral stromal area}} \times 100
-\end{equation}
-
-Only lymphocytes and plasma cells are included; polymorphonuclear leukocytes are excluded. Areas of necrosis, crush artifact, fibrosis, and hyalinization at the tumor border are also excluded from the assessment. The score is reported as a single average percentage per tumor on H\&E-stained full-tissue sections.
-
-Clinically, tumors with sTILs $\geq$ 50\% are classified as lymphocyte-predominant breast cancer (LPBC), indicating a strong immune response. Additional commonly used thresholds include sTILs < 10\% (TILs-low) and sTILs $\geq$ 30\% (TILs-high in many triple-negative breast cancer studies).
-
-This scoring methodology is fundamentally an \textit{area-based} measurement: it requires accurately delineating the boundary of each lymphocyte to compute its area contribution, not merely detecting its presence or counting its centroid. This distinction has direct implications for the design of automated nuclei analysis systems. Object detection models that output only bounding boxes or centroids are insufficient for sTILs scoring because they discard boundary geometry. Accurate sTILs computation requires methods that can both detect individual cells and delineate their boundaries, particularly in densely clumped regions where cell boundaries are ambiguous.
-
-\subsubsection{Cell Count-based Measurements}
-
-An alternative approach to quantifying immune infiltration is through cell count-based measurements, which estimate the number of immune cells per unit area rather than computing their proportional area. The most prominent example is the \textbf{Immunoscore}, developed and validated by Pag{\`e}s et al. \cite{pages2018immunoscore} for colorectal cancer. The Immunoscore quantifies the density of CD3$^+$ and CD8$^+$ T lymphocytes within two histological regions: the \textbf{tumor core} (CT) and the \textbf{invasive margin} (IM). This yields four density values, expressed as the number of positive cells per square millimeter:
-
-\begin{equation}
-	\text{IS} = \bigl\{d_{\text{CD3}}^{\text{CT}},\; d_{\text{CD3}}^{\text{IM}},\; d_{\text{CD8}}^{\text{CT}},\; d_{\text{CD8}}^{\text{IM}}\bigr\}
-\end{equation}
-
-where $d_{m}^{r}$ denotes the density of marker $m \in \{\text{CD3}, \text{CD8}\}$ in region $r \in \{\text{CT}, \text{IM}\}$. Each density value is classified as high (1) or low (0) based on a predefined percentile threshold determined from a reference patient cohort. The four binary values are then summed to produce the final Immunoscore:
-
-\begin{equation}
-	\text{Immunoscore} = \sum_{m \in \{\text{CD3}, \text{CD8}\}} \sum_{r \in \{\text{CT}, \text{IM}\}} \mathbb{1}\bigl[d_{m}^{r} \geq \tau_{m}^{r}\bigr]
-\end{equation}
-
-where $\tau_{m}^{r}$ is the density threshold for marker $m$ in region $r$ and $\mathbb{1}[\cdot]$ is the indicator function. The resulting score ranges from I0 (all four densities low) to I4 (all four densities high), with higher scores indicating stronger immune infiltration and consistently associated with improved patient survival across multiple validation cohorts.
-
-Unlike area-based TILs scoring, count-based measurements do not require accurate boundary delineation of each individual cell. A detection model that correctly identifies cell centroids is sufficient to count cells per unit area. However, count-based methods typically require immunohistochemical (IHC) staining for specific markers (e.g., CD3, CD8) rather than standard H\&E staining, which limits their applicability in resource-constrained settings where IHC is not routinely available. Furthermore, the area-based sTILs methodology has been more widely adopted across cancer types, particularly in breast cancer, making it the more broadly relevant measurement for automated analysis systems.
 
 \subsection{Digital Pathology Imaging}
 
@@ -147,7 +132,7 @@ When two stains are present, the stain matrix $S$ is formed by concatenating the
 
 Since stain appearance varies across scanners, laboratories, and tissue types, the stain vectors must be estimated from each individual image or dataset. Several methods exist for automatic stain vector estimation:
 
-\textbf{Macenko's method}\cite{macenko2009} estimates stain vectors by analyzing the angular distribution of pixel OD values through Singular Value Decomposition (SVD). The procedure operates as follows.
+\textbf{Macenko's method} \cite{macenko2009} estimates stain vectors by analyzing the angular distribution of pixel OD values through Singular Value Decomposition (SVD). The procedure operates as follows.
 
 Given an RGB image with $N$ pixels, each pixel $\mathbf{p}_i = [R_i, G_i, B_i]^T$ is first converted to optical density space:
 \begin{equation}
@@ -183,6 +168,7 @@ This third vector is orthogonal to both $\mathbf{s}_H$ and $\mathbf{s}_E$ and ca
 Macenko's method is widely adopted due to its computational simplicity and robustness, as the SVD-based projection efficiently captures the dominant stain directions without iterative optimization.
 
 \subsubsection{Color Deconvolution}
+\label{sec:color-deconvolution}
 
 Color deconvolution is the process of separating an H\&E-stained image into its individual stain channels. Given the stain matrix $S$ and the OD image $\mathbf{v}$ (a pixel vector in OD space), the stain concentrations $\mathbf{c}$ for each pixel are obtained by solving the linear system:
 
@@ -207,50 +193,47 @@ The standard approach to stain normalization involves three steps: (1) estimate 
 This process preserves the structural content of the image while standardizing color appearance. Stain normalization is commonly applied as a preprocessing step before training or inference in computational pathology pipelines.
 
 
-\subsection{Segmentation Paradigms}
+\subsection{Instance Segmentation Paradigms}
+\label{sec:instance-seg}
 
-\subsubsection{Semantic Segmentation}
+Instance segmentation extends semantic segmentation by assigning a unique label to each individual object instance, producing both a class label and an instance identity for every pixel. This section surveys the two dominant paradigms for nuclei instance segmentation: mask-based methods that produce dense per-pixel predictions, and contour-based methods that predict sparse geometric parameters.
 
-Semantic segmentation assigns a class label to every pixel in an image, producing a dense classification map where each pixel is labeled as belonging to one of several classes. Formally, given an input image $\mathbf{X} \in \mathbb{R}^{H \times W \times C}$, a semantic segmentation model produces a label map $\mathbf{Y} \in \{1, \ldots, K\}^{H \times W}$ where $K$ is the number of classes and each $Y_{i,j}$ indicates the class of pixel $(i,j)$.
+\subsubsection{Mask-Based Instance Segmentation}
+\label{sec:mask-based}
 
-The standard architecture for semantic segmentation is the fully convolutional network (FCN), which replaces the fully connected layers of a classification network with convolutional layers to produce spatially dense outputs. The encoder-decoder structure is common: an encoder backbone (e.g., ResNet, VGG) progressively downsamples the input to extract high-level features, while a decoder progressively upsamples these features to recover the original spatial resolution. Skip connections between corresponding encoder and decoder layers help preserve fine-grained spatial details that would otherwise be lost during downsampling.
-
-Semantic segmentation is effective for macro-level area measurements, such as estimating the overall proportion of stromal tissue occupied by lymphocytes. However, it does not distinguish between individual instances of the same class: all nuclei receive the same label regardless of their spatial separation, making it impossible to count individual cells.
-
-\subsubsection{Instance Segmentation}
-
-Instance segmentation extends semantic segmentation by assigning a unique label to each individual object instance, producing both a class label and an instance identity for every pixel. Given an input image, the output is a label map where each pixel is assigned a pair $(c, k)$ indicating that it belongs to instance $k$ of class $c$.
-
-Two dominant paradigms exist for instance segmentation. \textbf{Proposal-based methods} such as Mask R-CNN \cite{he2017mask} operate in two stages: a region proposal network (RPN) generates candidate object bounding boxes, and a mask head then predicts a binary segmentation mask for each proposal. While accurate, the two-stage pipeline introduces significant computational overhead, particularly when the number of instances is large.
+Two dominant paradigms exist for mask-based instance segmentation. \textbf{Proposal-based methods} such as Mask R-CNN \cite{he2017mask} operate in two stages: a region proposal network (RPN) generates candidate object bounding boxes, and a mask head then predicts a binary segmentation mask for each proposal. While accurate, the two-stage pipeline introduces significant computational overhead, particularly when the number of instances is large.
 
 \textbf{Dense prediction methods} such as U-Net \cite{ronneberger2015u} and HoVer-Net \cite{graham2019hover} predict instance information directly from dense feature maps. U-Net produces pixel-level embeddings where each pixel is mapped to a high-dimensional space, and instances are separated by clustering pixels based on embedding distance. HoVer-Net predicts horizontal and vertical distance maps from each pixel to the centroids of neighboring cells, using these maps to separate touching or overlapping instances. While these methods can achieve high accuracy, they require computationally expensive post-processing (e.g., watershed algorithms, clustering, or morphological operations) to convert dense predictions into individual instance masks.
 
-\subsubsection{Limitations of Segmentation for Nuclei Analysis}
-
-Segmentation-based approaches face two fundamental limitations when applied to nuclei analysis in histopathology images.
+Mask-based approaches face two fundamental limitations when applied to nuclei analysis in histopathology images.
 
 The \textbf{overlap problem} arises from the mutually exclusive pixel assignment inherent in segmentation. In a two-dimensional image, each pixel can only belong to one instance. When nuclei overlap in 3D tissue and are projected onto a 2D plane, their boundaries become entangled: a single pixel at the boundary between two overlapping nuclei cannot simultaneously represent both cells. Segmentation models resolve this ambiguity by drawing an artificial boundary between the two cells, which distorts the true morphology of both. This distortion is particularly problematic for nuclei analysis, where accurate boundary delineation directly affects area-based measurements such as TILs scoring.
 
 The \textbf{computational bottleneck} stems from the dense prediction paradigm: segmentation models must classify every pixel in the image, including the vast majority of background pixels that carry no useful information. For a typical histopathology patch of $256 \times 256$ pixels, this means producing 65,536 individual predictions, even when only a small fraction correspond to actual nuclei. This per-pixel cost becomes prohibitive when processing whole-slide images, which may contain billions of pixels. The post-processing required to extract individual instances from dense predictions (clustering, watershed, morphological operations) adds further computational overhead.
 
-\subsection{Detection Paradigms}
+\subsubsection{Contour-Based Instance Segmentation}
+\label{sec:contour-based}
 
-Object detection models operate by dividing the input image into a spatial grid and predicting a fixed set of parameters (typically a bounding box and a class label) at each spatial location. Unlike segmentation, which classifies every pixel, detection produces a sparse set of structured outputs that describe the position and extent of individual objects. This grid-based prediction framework forms the foundation of modern single-stage detectors such as YOLO \cite{redmon2016yolo} and two-stage detectors such as Faster R-CNN \cite{ren2015faster}, and is the paradigm adopted in this work.
+Contour-based instance segmentation approaches the problem from a different perspective. Instead of predicting a dense pixel-wise mask, contour-based methods predict a sparse set of geometric parameters that describe each object's boundary. The most prominent representation for nuclei is the star-convex polygon \cite{schmidt2018cell}, where a nucleus is represented by its centroid and a set of radial distances at fixed angular intervals. This representation is compact (requiring only $2 + R$ parameters per nucleus, where $R$ is the number of rays), inherently boundary-aware, and can naturally handle overlapping instances by allowing polygons to intersect.
 
-\subsubsection{Anchor Grid}
+Contour-based instance segmentation shares its architectural structure with object detection rather than with mask-based segmentation. Both contour-based methods and detection operate on an anchor grid, predict a sparse set of geometric parameters per location, and train through matching mechanisms rather than per-pixel classification. The detection foundations that enable contour-based methods are discussed below.
+
+\subsubsubsection{Anchor Grid}
+\label{sec:anchor-grid}
 
 In grid-based detection frameworks, predictions are organized around an \textbf{anchor grid}: a regular lattice of reference boxes (anchors) placed at each spatial location of a feature map. At each grid cell, multiple anchors of different scales and aspect ratios are defined to accommodate objects of varying sizes and shapes. Each anchor serves as a prior that the network refines into a final prediction by regressing coordinate offsets relative to the anchor dimensions and classifying the object category.
 
 The anchor grid determines several key properties of the detector. It defines the maximum number of detections the model can produce: for a feature map of resolution $H \times W$ with $A$ anchors per cell, the model generates up to $H \times W \times A$ predictions. Each grid cell is responsible for detecting objects whose centroids fall within its receptive field, creating a natural spatial correspondence between image regions and model outputs. This regular grid structure enables the detector to process objects at multiple scales simultaneously by operating on feature maps at different resolutions, with coarser grids detecting larger objects and finer grids detecting smaller objects.
 
-\subsubsection{Matching Mechanisms in Object Detection}
+\subsubsubsection{Matching Mechanisms in Object Detection}
+\label{sec:matching}
 
 A fundamental challenge in training detection models is establishing the correspondence between predicted outputs and ground-truth objects, a process known as \textbf{matching}. Given the anchor grid produces a large number of predictions per image, the matching mechanism determines which predictions are assigned to which ground-truth objects during loss computation.
 
 During training, predictions are matched to ground-truth objects using an assignment rule. The assignment is formulated by constructing a \textbf{cost matrix} (also called a score matrix, depending on whether lower or higher values indicate better matches) that quantifies the quality of each prediction--ground-truth pair. Given $N$ ground-truth objects and $M$ predictions, the cost matrix $\mathbf{C} \in \mathbb{R}^{N \times M}$ is defined such that element $C_{i,j}$ measures the dissimilarity between ground-truth object $i$ and prediction $j$. The most common choice for $C_{i,j}$ is the negative IoU:
 
 \begin{equation}
-	C_{i,j} = 1 - \text{IoU}(g_i, p_j)
+    C_{i,j} = 1 - \text{IoU}(g_i, p_j)
 \end{equation}
 
 where $g_i$ is the bounding box (or polygon) of ground-truth object $i$ and $p_j$ is the predicted bounding box (or polygon). Since IoU ranges from 0 to 1, the cost $C_{i,j}$ also ranges from 0 (perfect overlap) to 1 (no overlap). Alternatively, some frameworks use a score matrix $\mathbf{S} \in \mathbb{R}^{N \times M}$ where $S_{i,j} = \text{IoU}(g_i, p_j)$ and the goal is to maximize the total score rather than minimize the total cost. The two formulations are equivalent: minimizing $\sum C_{i,j}$ is the same as maximizing $\sum S_{i,j}$ when $C_{i,j} = 1 - S_{i,j}$.
@@ -258,20 +241,21 @@ where $g_i$ is the bounding box (or polygon) of ground-truth object $i$ and $p_j
 In addition to localization cost, the cost matrix may incorporate a \textbf{classification cost} term that penalizes mismatched class predictions. For multi-class detection with $K$ classes, the classification cost can be defined using the cross-entropy between the predicted class distribution and the ground-truth class:
 
 \begin{equation}
-	C_{i,j}^{\text{cls}} = -\log \hat{p}_j(c_i)
+    C_{i,j}^{\text{cls}} = -\log \hat{p}_j(c_i)
 \end{equation}
 
 where $\hat{p}_j(c_i)$ is the predicted probability of class $c_i$ (the true class of ground-truth $i$) and the total cost combines both terms:
 
 \begin{equation}
-	C_{i,j} = C_{i,j}^{\text{loc}} + \lambda_{\text{cls}} \cdot C_{i,j}^{\text{cls}}
+    C_{i,j} = C_{i,j}^{\text{loc}} + \lambda_{\text{cls}} \cdot C_{i,j}^{\text{cls}}
 \end{equation}
 
 with $\lambda_{\text{cls}}$ controlling the relative weight of classification versus localization. This combined cost matrix encodes both spatial alignment and semantic correctness into a single assignment objective.
 
 Once the cost matrix is constructed, an assignment algorithm operates on it to determine which predictions correspond to which ground-truth objects. The choice of assignment algorithm determines whether the matching is one-to-many (allowing multiple predictions per ground-truth object), many-to-one (allowing one prediction to be matched to multiple ground-truth objects), or one-to-one (bipartite). Traditional methods such as Faster R-CNN \cite{ren2015faster} use IoU-based thresholding on this matrix: a prediction is assigned to a ground-truth object if $C_{i,j}$ falls below a threshold. This assignment is often ambiguous when multiple predictions overlap with the same ground-truth object, requiring heuristics to resolve conflicts. Modern YOLO variants use more sophisticated strategies, such as task-aligned matching and dual-label assignment, which extend the cost matrix with additional alignment terms. These strategies are discussed in Section~\ref{sec:e2e-matching}.
 
-\subsubsection{Feature Pyramid Networks}
+\subsubsubsection{Feature Pyramid Networks}
+\label{sec:fpn}
 
 A single feature map at a fixed resolution presents a fundamental limitation for object detection: objects in natural images vary widely in scale, and features that are discriminative for large objects (derived from deep, low-resolution layers with large receptive fields) may be too coarse to localize small objects, while features suitable for small objects (from shallow, high-resolution layers) may lack the semantic context needed to recognize large objects. \textbf{Feature Pyramid Networks (FPN)} \cite{lin2017fpn} address this by constructing a multi-scale feature pyramid from a single input image in a computationally efficient manner.
 
@@ -287,7 +271,8 @@ In a detector, each pyramid level is assigned to objects within a specific scale
 
 However, FPN also contributes to duplicate predictions. When an object falls near the boundary between two assigned scale ranges, it may be detected at two adjacent pyramid levels simultaneously, producing two spatially overlapping predictions for the same object. These cross-level duplicates are a significant source of redundancy that downstream NMS must resolve.
 
-\subsubsection{Non-Maximum Suppression}
+\subsubsubsection{Non-Maximum Suppression}
+\label{sec:nms}
 
 Non-maximum suppression (NMS) is a post-processing step used by most detection frameworks to eliminate duplicate predictions. When multiple predictions overlap with the same ground-truth object, NMS selects the prediction with the highest confidence score and suppresses (removes) all other predictions whose overlap with the selected one exceeds a predefined IoU threshold.
 
@@ -305,13 +290,9 @@ The IoU threshold $\tau_{\text{nms}}$ controls the trade-off between eliminating
 
 NMS introduces a fundamental tension in nuclei detection. In densely clumped regions, multiple nuclei overlap significantly, producing predictions that are spatially close and have high mutual IoU. A low NMS threshold aggressively suppresses these predictions, reducing duplicates but also removing valid detections of distinct cells. A high threshold preserves more predictions but allows duplicates to remain, inflating the cell count. Neither setting resolves the underlying problem: NMS cannot distinguish between two overlapping predictions of the same cell and two valid predictions of adjacent cells that happen to overlap.
 
-\subsubsection{Limitations of Detection for Nuclei Analysis}
+\subsubsubsection{Limitations for Nuclei Analysis}
 
-Detection models offer computational advantages over segmentation but face two critical shortcomings when applied to nuclei analysis.
-
-The \textbf{boundary problem} is that bounding box representations discard cell morphology. A bounding box encloses the approximate spatial extent of a cell but does not capture its shape. For approximately circular nuclei, the difference between bounding box area and true cell area may be modest, but for irregularly shaped or overlapping nuclei, bounding boxes significantly overestimate cell size and destroy the geometric information necessary for area-based measurements such as TILs scoring. A detection model can identify where cells are but cannot determine how much area each cell occupies.
-
-The \textbf{density problem} compounds the boundary problem in the very regions where accuracy matters most. In densely clumped areas, cells are closely spaced and their bounding boxes overlap heavily. NMS must then decide which overlapping boxes correspond to distinct cells and which are duplicate predictions of the same cell. Since this decision is based solely on geometric overlap and confidence scores, NMS systematically undercounts in clumped regions: valid detections of adjacent cells are suppressed because their boxes overlap, while in sparse regions where cells are well-separated, NMS has little effect. This creates a density-dependent counting bias where the model performs worst precisely in the regions most relevant to clinical assessment.
+Contour-based methods inherit the architectural properties of object detection, including its limitations. While the star-convex polygon representation addresses the boundary problem by preserving cell morphology, the \textbf{density problem} persists. In densely clumped regions, neighboring nuclei generate overlapping polygon predictions, and NMS must distinguish between duplicate predictions of the same cell and valid predictions of distinct cells. Since NMS relies solely on geometric overlap and confidence scores, it systematically undercounts in clumps where adjacent cells have high mutual IoU. This creates a density-dependent counting bias where the model performs worst precisely in the regions most relevant to clinical assessment.
 
 \subsection{Convolutional Neural Networks}
 
@@ -334,6 +315,7 @@ The kernel size directly determines the model's ability to capture spatial conte
 For nuclei detection, a sufficiently large receptive field is critical because nuclei can vary significantly in size, and contextual information from surrounding tissue helps distinguish nuclei from artifacts and debris. Methods such as LKCell \cite{cui2024lkcell} demonstrate that using large convolution kernels (e.g., $7 \times 7$ or larger) with structural reparameterization can achieve large receptive fields with lower computational cost than stacking many small-kernel layers.
 
 \subsubsection{Depthwise Convolution}
+\label{sec:depthwise-conv}
 
 Depthwise convolution is a spatial decomposition of the standard convolution operation that significantly reduces computational cost. In a standard convolution with $C_{\text{in}}$ input channels and $C_{\text{out}}$ output channels using a $K \times K$ kernel, the number of multiplications per spatial position is $K^2 \cdot C_{\text{in}} \cdot C_{\text{out}}$. Depthwise convolution decomposes this into two steps:
 
@@ -343,6 +325,34 @@ Depthwise convolution is a spatial decomposition of the standard convolution ope
 \end{enumerate}
 
 The total cost is $K^2 \cdot C_{\text{in}} + C_{\text{in}} \cdot C_{\text{out}}$ per position, compared to $K^2 \cdot C_{\text{in}} \cdot C_{\text{out}}$ for standard convolution. The reduction factor is approximately $K^2$, making depthwise convolution particularly effective for larger kernel sizes. This efficiency makes depthwise separable convolutions a key building block in lightweight architectures, as demonstrated by MobileNet \cite{howard2017mobilenets} and adopted in subsequent YOLO variants for efficient feature extraction.
+
+\subsection{Optimizers}
+
+The choice of optimizer plays a critical role in training deep neural networks, affecting both convergence speed and final model quality. This section reviews two optimizers relevant to the proposed RayCastED model.
+
+\subsubsection{Stochastic Gradient Descent with Momentum}
+
+Stochastic Gradient Descent (SGD) remains one of the most widely used optimization algorithms in deep learning. Given a loss function $\mathcal{L}(\theta)$ parameterized by $\theta$, SGD updates the parameters using the gradient of the loss estimated from a mini-batch of training samples:
+
+\begin{equation}
+    \theta_{t+1} = \theta_t - \eta \nabla_{\theta} \mathcal{L}(\theta_t)
+\end{equation}
+
+where $\eta$ is the learning rate. While simple, vanilla SGD can converge slowly in directions with low curvature and oscillate in directions with high curvature.
+
+Momentum \cite{sutskever2013momentum} addresses this by accumulating a velocity vector that smooths the gradient trajectory:
+
+\begin{equation}
+    v_{t+1} = \mu v_t + \nabla_{\theta} \mathcal{L}(\theta_t), \quad
+    \theta_{t+1} = \theta_t - \eta v_{t+1}
+\end{equation}
+
+where $\mu \in [0, 1)$ is the momentum coefficient (typically $\mu = 0.9$ or $\mu = 0.99$). The velocity term accelerates convergence in consistent gradient directions and dampens oscillations, significantly improving training stability.
+
+\subsubsection{Muon Optimizer}
+\label{sec:muon}
+
+The Muon optimizer \cite{chen2025muon} is a recent optimization algorithm designed for training neural networks with matrix-structured parameters. Muon applies Newton-Schulz orthogonalization to the gradient matrix at each step, implicitly constraining the spectral norm of the weight matrices during training. This spectral normalization has been shown to improve training stability and generalization \cite{chen2025muon}. Muon has demonstrated strong empirical performance in training vision and language models, achieving faster convergence than AdamW while maintaining comparable or better final accuracy.
 
 \subsection{Discrete Wavelet Transform}
 
@@ -361,6 +371,7 @@ where $a \in \mathbb{R} \setminus \{0\}$ is the scale (dilation) parameter, $b \
 The CWT suffers from redundancy: the transform of a one-dimensional signal yields a two-dimensional coefficient map, and neighboring scales and translations are highly correlated. For computational efficiency and practical signal processing, the wavelet transform is commonly discretized.
 
 \subsubsection{Discrete Wavelet Transform}
+\label{sec:dwt}
 
 The \textbf{Discrete Wavelet Transform (DWT)} replaces the continuous scale-translation parameters with discrete samples, most commonly on a dyadic grid where $a = 2^{-j}$ and $b = k \cdot 2^{-j}$ for integers $j, k \in \mathbb{Z}$ \cite{mallat1989theory}. Under a multiresolution analysis framework \cite{mallat1989theory}, the DWT can be efficiently implemented as a cascade of filter banks. At each level, the signal is convolved with a pair of quadrature mirror filters: a low-pass filter $h[n]$ associated with the scaling function $\phi(t)$, and a high-pass filter $g[n]$ associated with the wavelet function $\psi(t)$, followed by downsampling by a factor of 2:
 
@@ -385,6 +396,7 @@ Each subband has half the spatial resolution of the input in both dimensions. Th
 The key advantage of wavelet decomposition over standard downsampling (e.g., strided convolution or max pooling) is that it provides a principled frequency separation. Standard downsampling discards high-frequency information entirely, which can eliminate fine textures and edges critical for accurate boundary delineation. Wavelet decomposition preserves high-frequency details in the LH, HL, and HH subbands, making these details available for subsequent processing.
 
 \subsubsection{Wavelet-Based Downsampling in CNNs}
+\label{sec:dwt-cnn}
 
 Integrating DWT into convolutional neural networks replaces standard downsampling operations (strided convolution or max pooling) with wavelet-based downsampling. In this approach, a feature map at one resolution is decomposed into its four wavelet subbands using DWT. The LL subband serves as the downsampled feature map for the next network stage, while the detail subbands (LH, HL, HH) can be concatenated with or injected into intermediate layers to preserve high-frequency information.
 
@@ -435,9 +447,10 @@ where $x_{i,j} = 1$ if ground-truth $i$ is assigned to prediction $j$, and $0$ o
 
 The \textbf{Hungarian algorithm} (Kuhn--Munkres) solves this problem in $O(\max(N, M)^3)$ time through the following steps on a square cost matrix (padded with large values if $N \neq M$): (1) subtract the row minimum from each row, (2) subtract the column minimum from each column, (3) cover all zero entries with the minimum number of horizontal and vertical lines, (4) if the number of lines equals $N$, an optimal assignment is found by selecting independent zeros; otherwise, subtract the smallest uncovered value from all uncovered entries, add it to all doubly covered entries, and repeat from step 3.
 
-This bipartite matching formulation is the foundation of end-to-end detection frameworks such as DETR and LSP-DETR \cite{pekar2026lsp}. By guaranteeing a unique assignment, it eliminates the need for NMS as a post-processing step, since each ground-truth object is matched to exactly one prediction and there are no duplicate assignments to suppress.
+This bipartite matching formulation is the foundation of end-to-end detection frameworks such as DETR. By guaranteeing a unique assignment, it eliminates the need for NMS as a post-processing step, since each ground-truth object is matched to exactly one prediction and there are no duplicate assignments to suppress.
 
 \subsubsection{Task-Aligned Matching}
+\label{sec:tal}
 
 Task-aligned matching is an assignment strategy used in YOLO-based detection frameworks that jointly considers classification and localization quality when matching predictions to ground-truth objects. Rather than using IoU alone, task-aligned matching defines a combined alignment metric:
 
@@ -448,6 +461,7 @@ Task-aligned matching is an assignment strategy used in YOLO-based detection fra
 where $s$ is the classification confidence score, $u$ is the predicted IoU between the prediction and the ground-truth object, and $\alpha, \beta$ are weighting hyperparameters that balance the contribution of classification and localization. A prediction is assigned to a ground-truth object only if its alignment metric $t$ exceeds a threshold, and each ground-truth object is assigned to the prediction with the highest $t$ value. This ensures that predictions assigned to an object are both well-localized (high IoU) and confidently classified, improving training stability.
 
 \subsubsection{Dual-Label Assignment}
+\label{sec:dual-label}
 
 Dual-label assignment, introduced in YOLO26, is a training strategy that combines one-to-many and one-to-one matching within a single architecture to achieve the benefits of both paradigms. The model employs two parallel detection heads: a \textbf{one-to-many head} that assigns multiple predictions to each ground-truth object (as in conventional YOLO training), and a \textbf{one-to-one head} that enforces a unique bipartite matching between predictions and ground-truth objects (as in DETR-style training).
 
@@ -534,20 +548,10 @@ Several PQ variants are commonly reported in nuclei segmentation literature:
 	where $C$ is the number of classes and $\text{PQ}_c$ is the PQ computed for class $c$ only.
 	\item \textbf{Binary PQ (bPQ):} computes PQ in a binary setting where all nuclei types are treated as a single class, ignoring type-specific distinctions. This is useful for evaluating pure instance segmentation performance independent of classification accuracy.
 	\item \textbf{PanNuke PQ (nuPQ):} the specific PQ variant used in the PanNuke benchmark, which computes mPQ across the 19 nuclei type categories defined in the dataset.
-	\item \textbf{Masked PQ ($\text{MPQ}$):} a variant introduced by LSP-DETR \cite{pekar2026lsp} designed for fair evaluation of overlapping nuclei. Standard PQ penalizes polygon predictions that cross artificially separated ground-truth boundaries in regions of biological overlap. MPQ replaces the standard IoU with a \textbf{masked IoU (mIoU)} that isolates evaluation to the matched ground-truth instance. Given a ground-truth mask $m_k$ and predicted polygon $\hat{m}_k$, and letting $\mathcal{G} = \bigcup_{k=1}^{K} m_k$ be the union of all ground-truth masks:
-
-	\begin{equation}
-		\text{mIoU}(m_k, \hat{m}_k) = \frac{|m_k \cap \hat{m}_k|}{|m_k \cup (\hat{m}_k \setminus \mathcal{G})|}
-	\end{equation}
-
-	\begin{equation}
-		\text{MPQ} = \underbrace{\frac{|TP|}{|TP| + \frac{1}{2}|FP| + \frac{1}{2}|FN|}}_{\text{RQ}} \times \underbrace{\frac{\sum_{(m_k,\hat{m}_k) \in TP} \text{mIoU}(m_k, \hat{m}_k)}{|TP|}}_{\text{SQ}_{\text{mask}}}
-	\end{equation}
-
-	The denominator in mIoU includes the ground-truth area plus only those parts of the prediction that fall outside $\mathcal{G}$, meaning predictions overlapping \textit{other} ground-truth masks beyond the matched one are penalized, but overlap with the matched instance itself is not double-counted. This makes MPQ the appropriate metric for polygon-based methods that output realistically overlapping cell representations.
 \end{itemize}
 
 \subsubsection{Aggregated Jaccard Index (AJI)}
+\label{sec:aji}
 
 The Aggregated Jaccard Index (AJI) \cite{kumar2017dataset} is an instance-level segmentation metric designed to address the overcounting problem in the standard Jaccard Index when applied to multi-object segmentation. In nuclei segmentation, the standard Jaccard Index (Intersection over Union, IoU) computed per instance and then averaged can overestimate performance because each ground-truth nucleus is free to match with any predicted nucleus independently, and unmatched predictions do not penalize the score.
 

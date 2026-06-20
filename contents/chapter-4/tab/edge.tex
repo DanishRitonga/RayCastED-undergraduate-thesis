@@ -1,0 +1,20 @@
+\begin{table}[H]
+	\centering
+	\caption{Edge deployment evaluation of RayCastED-B across GPU and embedded platforms. All measurements are taken over the PanNuke test set with batch size 1. The best value in each column is shown in \textbf{bold}.}
+	\label{tab:edge}
+	\small
+	\resizebox{\textwidth}{!}{%
+	\begin{tabular}{lcccccccc}
+		\hline
+		\textbf{Configuration} & \textbf{AJI} & \textbf{bPQ} & \textbf{mPQ} & \textbf{F1} & \textbf{Precision} & \textbf{Recall} & \textbf{Predicted Nuclei} & \textbf{Runtime (ms)} \\
+		\hline
+		RTX 5070 Ti, PyTorch           & 0.5715 & 0.6024 & 0.4526 & 0.7409 & 0.7419 & 0.7400 & \textbf{65679 / 65847} & 3.59 \\
+		RTX 5070 Ti, TensorRT          & 0.5700 & 0.6003 & 0.4735 & 0.7745 & 0.8067 & \textbf{0.7448} & 60796 / 65847 & \textbf{2.70} \\
+		Jetson Orin Nano, ONNX         & 0.5706 & 0.5986 & 0.4763 & 0.7748 & 0.8169 & 0.7368 & --            & 88.2 \\
+		Jetson Orin Nano, TF32        & \textbf{0.5819} & \textbf{0.6118} & \textbf{0.4897} & 0.7749 & \textbf{0.8170} & 0.7369 & 59394 / 65848 & 38.1 \\
+		Jetson Orin Nano, TF16        & 0.5817 & 0.6112 & 0.4894 & \textbf{0.7753} & 0.8140 & 0.7401 & --            & 29.2 \\
+		RTX 2080 Super, TensorRT       & 0.5694 & 0.5983 & 0.4746 & 0.7746 & 0.8149 & 0.7381 & 59640 / 65848 & 38.8 \\
+		\hline
+	\end{tabular}%
+	}
+\end{table}

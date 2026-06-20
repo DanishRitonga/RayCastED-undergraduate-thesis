@@ -76,7 +76,7 @@
 \usepackage{algcompatible}
 \usepackage{algpseudocode}
 \usepackage{listings}
-\usepackage{color}
+\usepackage[table]{xcolor}
 \usepackage{url}
 \usepackage{ifthen}
 \usepackage{forloop}
@@ -814,9 +814,15 @@
 \titleclass{\subsubsubsection}{straight}[\subsubsection]
 \titleformat{\subsubsubsection}{\raggedright\normalfont\normalsize\bfseries}{\thesubsubsubsection}{1em}{}
 \titlespacing{\subsubsubsection}{0pt}{12pt plus 4pt minus 2pt}{0pt plus 2pt minus 2pt}
+% Format subsubsubsection entries in the Table of Contents
+\renewcommand{\@dotsep}{\cftdotsep}
+\newcommand*\l@subsubsubsection{\@dottedtocline{4}{9.3em}{5.0em}}
 
 \titleformat{\paragraph}[hang]{\raggedright\normalfont\normalsize\bfseries}{}{0pt}{}
 \titlespacing{\paragraph}{0pt}{12pt plus 4pt minus 2pt}{6pt plus 2pt minus 2pt}
+% Suppress \paragraph and \subparagraph from the Table of Contents
+\renewcommand*\l@paragraph[2]{}
+\renewcommand*\l@subparagraph[2]{}
 
 
 % Starting the main matter	

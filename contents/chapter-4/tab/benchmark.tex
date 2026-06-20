@@ -1,0 +1,19 @@
+\begin{table}[H]
+	\centering
+	\caption{Accuracy benchmarking results on the PanNuke test set. Best overall is shown in \textbf{bold}.}
+	\label{tab:benchmark}
+	\small
+	\begin{tabular}{lcccccc}
+		\hline
+		\textbf{Method} & \textbf{AJI} & \textbf{bPQ} & \textbf{mPQ} & \textbf{F1} & \textbf{Precision} & \textbf{Recall} \\
+		\hline
+		StarDist      & 0.5715 & 0.5945 & 0.3670  & 0.7806 & 0.8558 & 0.7176 \\
+		CellPose-SAM  & \textbf{0.6314} & 0.6028 & --     & 0.7969 & \textbf{0.8687} & 0.7360 \\
+		LKCell        & 0.6228 & \textbf{0.6793} & \textbf{0.5202} & \textbf{0.8147} & 0.8216 & \textbf{0.8079} \\
+		HoVer-NeXt    & 0.5680 & 0.6521 & 0.4708  & 0.7899 & 0.8320 & 0.7520 \\
+		RayCastED-S   & 0.5555 & 0.5780 & 0.4337  & 0.7176 & 0.7146 & 0.7206 \\
+		RayCastED-B   & 0.5715 & 0.6024 & 0.4526  & 0.7409 & 0.7419 & 0.7400 \\
+		RayCastED-L   & 0.5740 & 0.5947 & 0.4764  & 0.7591 & 0.8113 & 0.7132 \\
+		\hline
+	\end{tabular}
+\end{table}
