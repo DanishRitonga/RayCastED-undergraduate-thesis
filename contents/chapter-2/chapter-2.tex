@@ -6,59 +6,7 @@
 
 Table~\ref{tab:literature-review} summarizes the key prior works most relevant to the proposed RayCastED model.
 
-{\centering
-\begin{longtable}{l c c l >{\footnotesize}p{0.28\textwidth}}
-	\caption{Literature review of prior nuclei instance segmentation and detection methods.}
-	\label{tab:literature-review} \\
-	\hline
-	\textbf{Method} & \textbf{Year} & \textbf{Author} & \textbf{Approach} & \textbf{Mechanism} \\
-	\hline
-	\endfirsthead
-	\multicolumn{5}{c}{\textit{Table \thetable{} -- continued from previous page}} \\
-	\hline
-	\textbf{Method} & \textbf{Year} & \textbf{Author} & \textbf{Approach} & \textbf{Mechanism} \\
-	\hline
-	\endhead
-	\hline
-	\multicolumn{5}{r}{\textit{Continued on next page}} \\
-	\endfoot
-	\hline
-	\endlastfoot
-		StarDist \cite{schmidt2018cell, weigert2022stardist}
-			& 2018 & Schmidt et al.
-			& contour-based
-			& Star-convex polygon; predicts radial distances from centroid to boundary at fixed angular intervals; NMS post-processing \\
-		SplineDist \cite{mandal2020splinedist}
-			& 2020 & Mandal \& Uhlmann
-			& contour-based
-			& B-spline control points for cell boundary contours; infers cell shape from radial distances and fits splines; requires centroid-anchored patches; watershed or connected-components post-processing \\
-		TSFD-Net \cite{ilyas2022tsfd}
-			& 2022 & Ilyas et al.
-			& mask-based
-			& Tissue-specific feature distillation backbone extracts morphological features varying by tissue type; BiFPN generates hierarchical feature pyramid; interlinked decoders jointly optimize and fuse features; combinational loss for joint nuclei segmentation and classification; NMS post-processing \\
-		CPP-Net \cite{chen2023cppnet}
-			& 2023 & Chen et al.
-			& contour-based
-			& Context-aware polygon proposal network; predicts polygon vertices directly with multi-scale feature aggregation; NMS post-processing \\
-		CellViT \cite{horst2023cellvit}
-			& 2023 & Hörst et al.
-			& mask-based
-			& Vision Transformer encoder pre-trained on 104M histological image patches; leverages Segment Anything Model foundational architecture; transformer-based segmentation decoder; predicts cell probability, distance maps, and class labels; watershed post-processing \\
-		HoVer-NeXt \cite{baumann2024hovernext, graham2019hover}
-			& 2024 & Baumann et al.
-			& mask-based
-			& Horizontal/vertical distance maps from each pixel to neighboring centroids; watershed + morphological post-processing for instance separation \\
-		LKCell \cite{cui2024lkcell}
-			& 2024 & Cui et al.
-			& mask-based
-			& Large convolution kernels for computationally efficient receptive fields; transfers pre-trained large-kernel CNN to medical domain; single decoder with NP/HV/NT multitask output heads; watershed post-processing \\
-		CellPose \cite{stringer2020cellpose, stringer2025cellposesam}
-			& 2020 & Stringer et al.
-			& mask-based
-			& Gradient flow field pointing toward cell centroids combined with cell probability map; flow-field post-processing \\
-		\hline
-\end{longtable}
-}
+\input{contents/chapter-2/tab/literature-review}
 
 \subsection{Research Gap and Novelty}
 
@@ -411,7 +359,7 @@ This design is particularly relevant for nuclei detection, where cell boundaries
 \begin{figure}[htbp]
 	\centering
 	\input{contents/chapter-2/fig/geometry-definitions}
-	\caption{Illustration of convex and star-shaped polygons. (a) A convex polygon: the segment $\overline{q_1 q_2}$ connecting any two interior points lies entirely within the polygon. (b) A star-shaped polygon that is not convex: the kernel point $z$ (near the center) sees all boundary vertices (dashed green), yet the segment $\overline{q_1 q_2}$ connecting two interior points exits the polygon, demonstrating that the interior is not a convex set.}
+    \caption[Illustration of convex and star-shaped polygons.]{Illustration of convex and star-shaped polygons. (a) A convex polygon: the segment $\overline{q_1 q_2}$ connecting any two interior points lies entirely within the polygon. (b) A star-shaped polygon that is not convex: the kernel point $z$ (near the center) sees all boundary vertices (dashed green), yet the segment $\overline{q_1 q_2}$ connecting two interior points exits the polygon, demonstrating that the interior is not a convex set.}
 	\label{fig:geometry-definitions}
 \end{figure}
 

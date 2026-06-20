@@ -1,5 +1,31 @@
 \chapter{Research Methodology}
 
+\section{Research Workflow}
+
+The development of RayCastED followed four sequential phases, each building on the output of the preceding one. Figure~\ref{fig:research-workflow} illustrates this workflow.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\textwidth]{contents/chapter-3/fig/research-workflow.pdf}
+    \caption[Research Workflow]{Research workflow organized into four sequential phases: literature review and data exploration, geometry module and data pipeline development, deep learning model development, and evaluation and ablation.}
+	\label{fig:research-workflow}
+\end{figure}
+
+\paragraph{Phase 1: Literature Review and Data Exploration.}
+The research began with a survey of existing nuclei detection and segmentation approaches, including contour-based methods (StarDist~\cite{schmidt2018cell}), cell border prediction (CellPose~\cite{stringer2020cellpose}), and multi-task learning architectures
+(LKCell~\cite{cui2024lkcell}, HoVer-NeXt~\cite{baumann2024hovernext}).
+Candidate datasets were surveyed for annotation format, tissue coverage, staining protocol, and compatibility with the raycast representation.
+
+\paragraph{Phase 2: Geometry Module and Data Pipeline Development.}
+The raycasting module was developed to compute ray-edge intersections. A data pre-processing pipeline was then built, consisting of three stages: data ingestion to read diverse annotation formats, data transformation including stain normalization and tiling, and a data loader with raycast-aware augmentation.
+
+\paragraph{Phase 3: Deep Learning Model Development.}
+A base object detection architecture was selected based on four criteria: a fully convolutional backbone for lightweight inference, single-stage prediction for computational efficiency, an established codebase for reproducibility, and NMS-free operation. The architecture was then modified for nuclei instance segmentation through a custom downsampling method and a task-specific prediction head. The training pipeline was implemented with a cosine annealing learning rate schedule and a combined loss function suited to the contour-based regression objective.
+
+\paragraph{Phase 4: Evaluation and Ablation.}
+RayCastED was benchmarked against existing methods using detection, segmentation, and efficiency metrics. Zero-shot generalization was tested on unseen datasets. Edge deployment feasibility was validated on the Jetson Orin Nano. Ablation studies were conducted on the architectural components and training configurations.
+
+
 \section{Datasets and Environmental Setup}
 
 This study used publicly available secondary datasets for training and evaluation. Table~\ref{tab:datasets} summarized the datasets and their roles.
@@ -67,7 +93,7 @@ The fixed-length structure is essential for deep learning: it allows the network
 \begin{figure}[H]
     \centering
     \resizebox{0.55\textwidth}{!}{\input{contents/chapter-3/fig/raycast-generation}}
-    \caption{RayCast representation of a cell polygon. From the area-weighted centroid $\mathbf{P}$, $R=32$ rays are cast at uniformly spaced angles. Each distance $d_r$ records the nearest boundary intersection along ray $r$.}
+    \caption[RayCast representation of a nuclei]{RayCast representation of a nuclei. From the area-weighted centroid $\mathbf{P}$, rays are cast at uniformly spaced angles. Each distance $d_r$ records the nearest boundary intersection along ray $r$.}
     \label{fig:raycast-generation}
 \end{figure}
 
@@ -160,7 +186,7 @@ connected cyclically. The angular direction vectors $\mathbf{D}_r$ are precomput
 \begin{figure}[H]
 	\centering
 	\resizebox{0.9\textwidth}{!}{\input{contents/chapter-3/fig/Ingestor-UML}}
-	\caption{UML class diagram of the modular ingestion pipeline. \texttt{BaseDataIngestor} defines the shared infrastructure; concrete ingestors implement format-specific \texttt{process\_item} logic; all converge on the unified raycast annotation format via \texttt{RayCastGPU}.}
+    \caption[UML class diagram of the modular ingestion pipeline.]{UML class diagram of the modular ingestion pipeline. \texttt{BaseDataIngestor} defines the shared infrastructure; concrete ingestors implement format-specific \texttt{process\_item} logic; all converge on the unified raycast annotation format via \texttt{RayCastGPU}.}
 	\label{fig:ingestor-uml}
 \end{figure}
 
@@ -206,7 +232,7 @@ Tiles that fail estimation (all-white or fewer than 100 tissue pixels) are silen
 \begin{figure}[ht]
 	\centering
 	\includegraphics[width=0.99\textwidth]{contents/chapter-3/fig/stainEstimation.pdf}
-	\caption{Population-level stain vector estimation. A stratified 20\% subset of tiles is sampled per dataset and tissue type; the Macenko method estimates per-tile stain matrices and maximum concentrations, which are aggregated into the population profile $(\overline{\mathbf{M}},\, \mathbf{c}^*_{\max})$.}
+    \caption[Population-level stain vector estimation.]{Population-level stain vector estimation. A stratified 20\% subset of tiles is sampled per dataset and tissue type; the Macenko method estimates per-tile stain matrices and maximum concentrations, which are aggregated into the population profile $(\overline{\mathbf{M}},\, \mathbf{c}^*_{\max})$.}
 	\label{fig:stain-estimation}
 \end{figure}
 
@@ -278,7 +304,7 @@ where $\tau_{\text{survival}} = 0.5$. This prevents heavily truncated cells with
 \begin{figure}[H]
     \centering
     \resizebox{0.95\textwidth}{!}{\input{contents/chapter-3/fig/annotation-splitting}}
-    \caption{Annotation-aware raycast splitting. (a) The ROI is divided into overlapping tiles. Only cells whose centroids fall inside a given tile are assigned to it (centroid-owns-cell policy). (b) For each assigned cell, rays extending beyond the tile boundary are clipped to the nearest wall.}
+    \caption[Annotation-aware raycast splitting.]{Annotation-aware raycast splitting. (a) The ROI is divided into overlapping tiles. Only cells whose centroids fall inside a given tile are assigned to it (centroid-owns-cell policy). (b) For each assigned cell, rays extending beyond the tile boundary are clipped to the nearest wall.}
     \label{fig:annotation-splitting}
 \end{figure}
 
@@ -353,7 +379,7 @@ Dual-label assignment~\ref{sec:dual-label} eliminates NMS by enforcing one-to-on
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.65\textwidth]{contents/chapter-3/fig/ResoConv.pdf}
-	\caption{ResoConv}
+	\caption{ResoConv Block Architecture}
 	\label{fig:resoconv}
 \end{figure}
 
@@ -366,7 +392,7 @@ The four subbands are concatenated along the channel dimension and passed throug
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=1.10\textwidth]{contents/chapter-3/fig/RayCastDetect.pdf}
-	\caption{RayCastDetect}
+	\caption{RayCastDetect Block Architecture.}
 	\label{fig:raycastdetect}
 \end{figure}
 
@@ -434,7 +460,7 @@ The classification loss differs between branches. The o2m head uses focal loss (
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.5\textwidth]{contents/chapter-3/fig/L_rays.pdf}
-	\caption{Ray distance loss computation. The analytical ray distances are recomputed from the predicted centroid, and the log-space L1 loss is evaluated between the predicted and analytical distances.}
+    \caption[Ray distance loss computation.]{Ray distance loss computation. The analytical ray distances are recomputed from the predicted centroid, and the log-space L1 loss is evaluated between the predicted and analytical distances.}
 	\label{fig:l-rays}
 \end{figure}
 
@@ -453,7 +479,7 @@ The centroid loss $\mathcal{L}_{\text{xy}}$ uses Huber loss ($\delta = 0.05$) on
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=0.5\textwidth]{contents/chapter-3/fig/L_piou.pdf}
-	\caption{PolarIoU loss computed through sector-area decomposition. Each adjacent pair of rays forms a triangular sector, and the IoU is computed analytically from the sector intersections without rasterization.}
+    \caption[PolarIoU loss computed through sector-area decomposition.]{PolarIoU loss computed through sector-area decomposition. Each adjacent pair of rays forms a triangular sector, and the IoU is computed analytically from the sector intersections without rasterization.}
 	\label{fig:l-piou}
 \end{figure}
 
@@ -495,7 +521,7 @@ with cyclic indexing $d_{-1} \equiv d_{R-1}$ and $d_R \equiv d_0$. When all $d_i
 \begin{figure}[H]
 	\centering
 	\resizebox{0.95\textwidth}{!}{\input{contents/chapter-3/fig/evaluation}}
-	\caption{Evaluation Procedure Diagram}
+	\caption{Evaluation Procedure}
 	\label{fig:evaluation}
 \end{figure}
 
@@ -519,27 +545,3 @@ Two runtime backends are benchmarked on the desktop GPU (RTX 5070 Ti): native Py
 
 For edge deployment, the model is exported to ONNX (opset 17, graph simplified) and deployed on a Jetson Orin Nano. The ONNX graph exports raw logits only; all decoding (sigmoid for centroid offsets, softplus for ray distances, grid decoding, hierarchical classification combination) and postprocessing (top-k selection, confidence filtering, polygon scaling) are performed in a Python layer on-device. Three edge runtime configurations are evaluated: ONNX Runtime, TensorRT FP32, and TensorRT FP16. All configurations are tested on PanNuke Fold 3 for accuracy parity with the desktop results. Runtime is measured via wall-clock timing over all test images, reported as milliseconds per image. All metrics except GFLOPs and parameter count are reported, since the architecture is identical across backends. The FP32 versus FP16 comparison quantifies the accuracy-speed trade-off of half-precision inference on edge hardware.
 
-\section{Research Workflow}
-
-The development of RayCastED followed four sequential phases, each building on the output of the preceding one. Figure~\ref{fig:research-workflow} illustrates this workflow.
-
-\begin{figure}[H]
-	\centering
-	\includegraphics[width=\textwidth]{contents/chapter-3/fig/research-workflow.pdf}
-	\caption{Research workflow organized into four sequential phases: literature review and data exploration, geometry module and data pipeline development, deep learning model development, and evaluation and ablation.}
-	\label{fig:research-workflow}
-\end{figure}
-
-\paragraph{Phase 1: Literature Review and Data Exploration.}
-The research began with a survey of existing nuclei detection and segmentation approaches, including contour-based methods (StarDist~\cite{schmidt2018cell}), cell border prediction (CellPose~\cite{stringer2020cellpose}), and multi-task learning architectures
-(LKCell~\cite{cui2024lkcell}, HoVer-NeXt~\cite{baumann2024hovernext}).
-Candidate datasets were surveyed for annotation format, tissue coverage, staining protocol, and compatibility with the raycast representation.
-
-\paragraph{Phase 2: Geometry Module and Data Pipeline Development.}
-The raycasting module was developed to compute ray-edge intersections. A data pre-processing pipeline was then built, consisting of three stages: data ingestion to read diverse annotation formats, data transformation including stain normalization and tiling, and a data loader with raycast-aware augmentation.
-
-\paragraph{Phase 3: Deep Learning Model Development.}
-A base object detection architecture was selected based on four criteria: a fully convolutional backbone for lightweight inference, single-stage prediction for computational efficiency, an established codebase for reproducibility, and NMS-free operation. The architecture was then modified for nuclei instance segmentation through a custom downsampling method and a task-specific prediction head. The training pipeline was implemented with a cosine annealing learning rate schedule and a combined loss function suited to the contour-based regression objective.
-
-\paragraph{Phase 4: Evaluation and Ablation.}
-RayCastED was benchmarked against existing methods using detection, segmentation, and efficiency metrics. Zero-shot generalization was tested on unseen datasets. Edge deployment feasibility was validated on the Jetson Orin Nano. Ablation studies were conducted on the architectural components and training configurations.

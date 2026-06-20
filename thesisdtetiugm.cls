@@ -793,6 +793,8 @@
 
 % set figure, table, and equation style
 \@addtoreset {equation}{chapter}
+\@addtoreset {figure}{chapter}
+\@addtoreset {table}{chapter}
 \renewcommand\theequation
 {\ifnum \c@chapter>\z@ \@arabic\c@chapter-\fi \@arabic\c@equation}
 \renewcommand \thefigure
