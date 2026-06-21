@@ -1,0 +1,48 @@
+\begin{table}[htbp]
+	\centering
+	\caption{Training hyperparameters for RayCastED. Values are adopted from the YOLO26 defaults~\cite{sapkota2025yolo26} unless otherwise noted; RayCastED-specific values are marked with $\dagger$.}
+	\label{tab:hyperparameters}
+	\renewcommand{\arraystretch}{1.15}
+	\begin{tabular}{lll}
+		\hline
+		\textbf{Category} & \textbf{Hyperparameter} & \textbf{Value} \\
+		\hline
+		\multirow{2}{*}{Optimization}  & Optimizer              & MuSGD (Muon for 2D weights, \\
+		                                &                        & SGD+Nesterov for 1D params) \\
+		                                & Base learning rate     & 0.01 \\
+		                                & Momentum               & 0.937 \\
+		                                & Weight decay           & $5 \times 10^{-4}$ \\
+		                                & Gradient clip (max norm) & 10.0 \\
+		\hline
+		\multirow{3}{*}{Schedule}      & Epochs                 & 400 \\
+		                                & Batch size             & 16 \\
+		                                & Image size             & $256 \times 256$ \\
+		                                & LR schedule            & Cosine annealing \\
+		                                & Min LR $\eta_{\min}$ & $10^{-4}$ \\
+		\hline
+		\multirow{6}{*}{Assignment$^\dagger$} & o2m topk / topk$_2$ & 15 / 15 \\
+		                                & o2o topk / topk$_2$    & 7 / $3 \to 1$ (annealed) \\
+		                                & $\alpha$ (cls weight)  & 0.5 \\
+		                                & $\beta$ (PolarIoU weight) & 2.0 \\
+		                                & $\sigma$ scale         & 1.0 (75th-pct ray distance) \\
+		                                & o2o topk$_2$ anneal window & epoch 67 $\to$ 50\% of schedule \\
+		\hline
+		\multirow{5}{*}{Loss weights$^\dagger$} & $\lambda_{\text{cls}}$ & 2.0 \\
+		                                & $\lambda_{\text{xy}}$  & 500.0 \\
+		                                & $\lambda_{\text{L1}}$  & 14.0 \\
+		                                & $\lambda_{\text{piou}}$ & 3.0 \\
+		                                & $\lambda_{\text{smooth}}$ & $0 \to 3$ (first 40\%) \\
+		\hline
+		\multirow{3}{*}{Classification loss} & Focal $\gamma$   & 2.0 \\
+		                                & Focal $\alpha$         & 0.75 \\
+		                                & BG subsampling (o2m)   & 3:1 (BG:FG) \\
+		\hline
+		\multirow{3}{*}{Annealing$^\dagger$} & o2m/o2o loss weights & $0.8/0.2 \to 0.1/0.9$ (linear) \\
+		                                & $\lambda_{\text{smooth}}$ ramp & $0 \to 3$ over first 40\% \\
+		                                & o2o topk$_2$           & $3 \to 1$ (epoch 67 $\to$ 50\%) \\
+		\hline
+		\multirow{2}{*}{Misc}           & Centroid Huber $\delta$ & 0.05 \\
+		                                & Confidence threshold (inference)$^\dagger$ & 0.20 \\
+		\hline
+	\end{tabular}
+\end{table}

@@ -23,6 +23,10 @@
 			& 2020 & Mandal \& Uhlmann
 			& contour-based
 			& B-spline control points for cell boundary contours; infers cell shape from radial distances and fits splines; requires centroid-anchored patches; watershed or connected-components post-processing \\
+		CellPose \cite{stringer2020cellpose, stringer2025cellposesam}
+			& 2020 & Stringer et al.
+			& mask-based
+			& Gradient flow field pointing toward cell centroids combined with cell probability map; flow-field post-processing \\
 		TSFD-Net \cite{ilyas2022tsfd}
 			& 2022 & Ilyas et al.
 			& mask-based
@@ -43,9 +47,17 @@
 			& 2024 & Cui et al.
 			& mask-based
 			& Large convolution kernels for computationally efficient receptive fields; transfers pre-trained large-kernel CNN to medical domain; single decoder with NP/HV/NT multitask output heads; watershed post-processing \\
-		CellPose \cite{stringer2020cellpose, stringer2025cellposesam}
-			& 2020 & Stringer et al.
+		NuLite \cite{tommasino2024nulite}
+			& 2024 & Tommasino et al.
 			& mask-based
-			& Gradient flow field pointing toward cell centroids combined with cell probability map; flow-field post-processing \\
+			& U-Net-like architecture built on Fast-ViT lightweight backbone; three scaled variants (S/M/H) trade capacity for speed; matches CellViT accuracy with up to $40\times$ fewer parameters; watershed post-processing \\
+		FKDNuSeg \cite{zhao2026fkdnuseg}
+			& 2026 & Zhao et al.
+			& mask-based
+			& Flawless knowledge distillation from a heavy teacher to a lightweight student segmentation network; joint instance segmentation and classification with distillation on both pixel-level and instance-level outputs; watershed post-processing \\
+		LSP-DETR \cite{pekar2026lspdetr}
+			& 2026 & Pekár et al.
+			& contour-based
+			& Lightweight linear-complexity transformer processes larger image patches without added cost; nuclei represented as star-convex polygons; radial distance loss enables overlapping nuclei segmentation without explicit overlap annotations or handcrafted post-processing; fully end-to-end, NMS-free \\
 		\hline
 \end{longtable}

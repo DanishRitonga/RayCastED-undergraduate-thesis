@@ -7,7 +7,7 @@ in histopathology images. Unlike prior methods that rely on dense per-pixel pred
 (NMS, watershed, or flow-field), RayCastED formulates the task as a sparse regression problem on an anchor grid and produces
 final instance masks in a single forward pass. The key findings are summarized below.
 
-\paragraph{Detection and Segmentation Accuracy.}
+\
 RayCastED achieves competitive performance against state-of-the-art methods on the PanNuke benchmark. The largest variant
 (RayCastED-L, 9.44M parameters) achieves metrics within 10\% of the best result in every accuracy column (AJI, bPQ, mPQ,
 F1, Precision, Recall) while requiring a fraction of the parameter count and GFLOPs of the most accurate competitor
@@ -17,14 +17,14 @@ the Haar wavelet DWT (ResoConv) and the split classification head are the most i
 the ray count ablation indicates that the model does not yet fully exploit higher angular precision -- a current
 limitation that motivates further research.
 
-\paragraph{Edge Deployment Feasibility.}
+\
 The smallest variant (RayCastED-S, 0.81M parameters) demonstrates viable inference on the Jetson Orin Nano embedded AI
 accelerator. The NMS-free design ensures that inference complexity is image-size agnostic, determined solely by the fixed
 anchor grid at a given input resolution. This property enables throughput-consistent deployment across varying tile
 dimensions, a practical requirement for clinical whole-slide image analysis pipelines. TensorRT-optimized inference
 achieves real-time or near-real-time throughput on both desktop and embedded platforms.
 
-\paragraph{Generalization.}
+\
 Zero-shot evaluation on PUMA, panopTILs, and MoNuSAC reveals reasonable generalization of the PanNuke-trained model to
 PUMA (melanoma TILs), but a substantial performance drop on panopTILs and MoNuSAC, indicating that tissue-level and
 staining-protocol domain gaps require fine-tuning or retraining for target clinical domains. The RayCast representation
