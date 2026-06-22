@@ -30,28 +30,38 @@ As expected, increasing $R$ produces tighter approximations. The gain from $R=16
 \end{figure}
 
 \newpage
+\subsection{Training Convergence}
+\label{sec:training-convergence}
+
+Before reporting final benchmark numbers, we examine RayCastED's training dynamics to confirm that the curriculum and loss schedules described in Section~\ref{sec:curriculum} produce stable convergence across all components.
+
+Figure~\ref{fig:loss-curves} shows the five individual loss terms ($\mathcal{L}_{\text{cls}}, \mathcal{L}_{\text{xy}}, \mathcal{L}_{\text{L1}}, \mathcal{L}_{\text{piou}}, \mathcal{L}_{\text{smooth}}$) over the course of training. Because the loss weights span several orders of magnitude (e.g., $\lambda_{\text{xy}} = 500$ vs.\ $\lambda_{\text{cls}} = 2$), the curves are plotted as independent small multiples rather than on a shared axis. All five loss terms drop sharply during the early one-to-many supervised phase. The L1 ray distance loss exhibits the smoothest descent, reflecting the stable geometric supervision provided by the analytical ray recomputation from the predicted centroid. The smoothness loss remains near zero for the first 40\% of training while its weight ramps from 0 to 3; the ramp-up effect is visible as the curve lifts off and the penalty takes effect, after which it stabilizes.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\textwidth]{contents/chapter-4/fig/training-loss.png}
+	\caption[Training loss curves for each loss term.]{Training loss curves for each loss term. Each panel shows one of the five loss components ($\mathcal{L}_{\text{cls}}, \mathcal{L}_{\text{xy}}, \mathcal{L}_{\text{L1}}, \mathcal{L}_{\text{piou}}, \mathcal{L}_{\text{smooth}}$) over the full training schedule, plotted as independent small multiples to accommodate the large range of loss magnitudes.}
+	\label{fig:loss-curves}
+\end{figure}
+
+Figure~\ref{fig:metric-curves} reports the four validation metrics tracked during training: mAP$_{50}$, precision, recall, and bPQ. All four metrics improve substantially during the early training phase. Two notable rapid-climb events are visible: around epoch 100, precision and mAP$_{50}$ surge upward; and around epoch 168, precision, mAP$_{50}$, and bPQ all climb rapidly together. These jumps align with the cosine annealing restart points, where the learning rate reset allows the optimizer to escape plateau regions and refine the detection and segmentation heads further.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\textwidth]{contents/chapter-4/fig/training-val.png}
+	\caption[Validation metrics during training.]{Validation metrics during training. Each panel shows one of the four tracked metrics (mAP$_{50}$, precision, recall, bPQ) computed on the held-out validation fold across the full training schedule.}
+	\label{fig:metric-curves}
+\end{figure}
+
+\newpage
 \subsection{RayCastED Benchmarking Results}
 \label{sec:benchmarking}
 
-We compare RayCastED against four prior methods on the PanNuke test set. All models are evaluated under the same
-protocol on a held-out set of 4,716 nuclei across 79 images. Table~\ref{tab:benchmark} reports detection and
-segmentation accuracy, while Table~\ref{tab:benchmark-efficiency} reports model complexity and inference speed.
-
-\input{contents/chapter-4/tab/benchmark}
-
-CellPose-SAM and LKCell dominate the accuracy rankings, which is expected given their model complexity: as shown in Table~\ref{tab:benchmark-efficiency}, both operate at parameter counts and GFLOPs well above the RayCastED family, with super-linear time complexity in LKCell. RayCastED nonetheless delivers competitive performance. In particular, RayCastED-L achieves metrics within 10\% of the best result in every column while requiring a fraction of the parameters and GFLOPs and scaling with linear time complexity.
-
-\input{contents/chapter-4/tab/benchmark-efficiency}
-
-RayCastED achieves linear time complexity as a direct consequence of its post-processing-free design: without NMS or watershed, inference scales proportionally to the number of anchor positions rather than the number of detected objects. Since the anchor grid is fixed by input resolution and stride, this complexity is image-size agnostic -- the model accepts arbitrarily sized inputs without a super-linear increase in cost, enabling throughput-consistent deployment across varying tile dimensions.
-
-
-To provide deeper insight, we also break down the results by tissue type (Table~\ref{tab:per-tissue}) and by
-nuclei type (Table~\ref{tab:per-type}).
+We compare RayCastED against five prior methods -- StarDist, CPP-Net, CellViT, LKCell, and LSP-DETR -- on the PanNuke dataset, following the 3-fold cross-validation protocol described in Section~\ref{sec:benchmarking-protocol}. All models, including the baselines, are trained and evaluated under the same fold split, with the reported scores averaged across the three test folds. The accuracy results are first broken down by tissue type (Table~\ref{tab:per-tissue}) and by nuclei type (Table~\ref{tab:per-type}), after which Table~\ref{tab:benchmark-efficiency} contrasts the methods in terms of model complexity and inference speed.
 
 \input{contents/chapter-4/tab/per-tissue}
 
-The per-tissue breakdown reveals a nuanced picture beyond the global metrics. LKCell remains the strongest model across most organ types, with HoVer-NeXt occasionally taking the lead on Skin, Stomach, Kidney, and Pancreatic. Notably, RayCastED-L achieves the best mPQ on Uterus (0.4892) despite having only 10.3M parameters. More importantly, RayCastED-L exhibits the lowest standard deviation in per-tissue mPQ (0.0494), indicating the most consistent panoptic quality across heterogeneous organ types -- a critical property for deployment on multi-organ pathology workflows where unpredictable tissue variation is the norm.
+The per-tissue breakdown reveals a nuanced picture. LKCell achieves the highest overall bPQ (0.684) and mPQ (0.504), with CellViT (bPQ 0.679, mPQ 0.498) and CPP-Net (bPQ 0.680, mPQ 0.485) close behind. LSP-DETR (bPQ 0.675, mPQ 0.482) is competitive despite its linear-complexity design. RayCastED-L is the strongest member of the RayCastED family on mPQ (0.497, fourth overall), while RayCastED-B leads on bPQ (0.621, tied with RayCastED-L). Notably, RayCastED-L achieves the best mPQ on five organ types (Adrenal, Bile Duct, Breast, Liver, Thyroid) and the lowest standard deviation in per-tissue mPQ (0.048) among all methods except HoVer-NeXt, indicating the most consistent panoptic quality across heterogeneous organ types at its parameter tier -- a critical property for deployment on multi-organ pathology workflows where unpredictable tissue variation is the norm.
 
 \begin{figure}[H]
 	\centering
@@ -62,14 +72,18 @@ The per-tissue breakdown reveals a nuanced picture beyond the global metrics. LK
 
 \input{contents/chapter-4/tab/per-type}
 
-The per-type analysis follows a similar pattern: LKCell dominates across most nuclear categories, with HoVer-NeXt claiming occasional wins on Epithelial and Necrosis F1. A surprising result emerges in the Necrosis category, where the RayCastED family consistently achieves the highest recall despite having an order of magnitude fewer parameters. This suggests that the split classification head and the hierarchical multi-objective loss provide an advantage for detecting rare minority classes that are often under-represented in the training data.
+The per-type analysis shows LSP-DETR dominating across most nuclear categories, achieving the best F1 on Neoplastic (0.750), Inflammatory (0.697), Necrosis (0.474), and Epithelial (0.754). Two notable exceptions emerge where RayCastED holds an advantage. First, in the Necrosis category, RayCastED-S achieves the highest recall (0.486) -- remarkable for the smallest model in the comparison -- and the broader RayCastED family shows competitive recall on this rare minority class. Second, RayCastED-L achieves competitive F1 on Inflammatory (0.624) despite having an order of magnitude fewer parameters than LSP-DETR (9.44M vs.\ 45M) and LKCell (699.7M). HoVer-NeXt also claims two F1 wins (Necrosis 0.492 and Connective 0.646) using only an F1-trained variant, suggesting strong shape discrimination even without explicit precision/recall supervision.
+
+\input{contents/chapter-4/tab/benchmark-efficiency}
+
+As shown in Table~\ref{tab:benchmark-efficiency}, the parameter and GFLOPs gaps between RayCastED and the baselines are substantial. LKCell sits at the heavy extreme with 699.7M parameters and 214 GFLOPs, while the other baselines (StarDist, CPP-Net, HoVer-NeXt, LSP-DETR) cluster in the 32--45M range with 24--35 GFLOPs. RayCastED-S, the lightest variant, is over $40\times$ smaller than the next-lightest baseline and almost $860\times$ smaller than LKCell, while RayCastED-L (9.44M) remains $3$--$5\times$ smaller than the baseline cluster. Critically, the entire RayCastED family shares the same $O(n)$ linear time complexity as LSP-DETR via its post-hoc-processing-free design: without NMS or watershed, inference scales proportionally to the number of anchor positions rather than the number of detected objects. Since the anchor grid is fixed by input resolution and stride, this complexity is image-size agnostic -- the model accepts arbitrarily sized inputs without a super-linear increase in cost, enabling throughput-consistent deployment across varying tile dimensions. The two NMS-based contour methods (StarDist, CPP-Net) incur $O(n+k^2)$ complexity from their per-instance post-processing, while LKCell and HoVer-NeXt pay $O(n \log n + kn)$ for their watershed-based instance separation.
 
 \subsection{Generalization Test}
 \label{sec:generalization}
 
 To evaluate cross-dataset generalization without fine-tuning, we apply the PanNuke-trained RayCastED-B directly to
-MoNuSAC, panopTILs, and PUMA. Table~\ref{tab:generalization} reports the zero-shot performance in terms of AJI,
-bPQ, and F1.
+MoNuSAC, panopTILs, and PUMA. Table~\ref{tab:generalization} reports the zero-shot performance in terms of
+bPQ, precision, recall, and F1.
 
 \input{contents/chapter-4/tab/generalization}
 
@@ -91,7 +105,7 @@ smallest variant (RayCastED-S) on two platforms: a desktop GPU (RTX 5070 Ti) and
 
 \input{contents/chapter-4/tab/edge}
 
-The PyTorch baseline on the RTX 5070 Ti achieves near-exact predicted nuclei counts, confirming that the end-to-end inference pipeline operates correctly. When compiled with TensorRT, the RTX 5070 Ti reaches a per-image latency of 2.70~ms, representing a substantial speedup over PyTorch. Unexpectedly, TensorRT deployment on the Jetson Orin Nano yields consistently higher AJI, bPQ, and mPQ than the desktop GPU across both FP16 and TF32 configurations. This is unlikely to stem from reduced precision, since TF32 and FP16 produce near-identical metrics. A plausible explanation is that TensorRT's aggressive graph-level optimizations for the Jetson target architecture restructure the operator execution order in a way that benefits the model numerically. The absence of such gains on the older RTX 2080 Super (similarly running TensorRT) supports the hypothesis that the effect is architecture-specific rather than a universal property of engine compilation.
+The PyTorch baseline on the RTX 5070 Ti achieves near-exact predicted nuclei counts, confirming that the end-to-end inference pipeline operates correctly. When compiled with TensorRT, the RTX 5070 Ti reaches a per-image latency of 2.70~ms, representing a substantial speedup over PyTorch. Unexpectedly, TensorRT deployment on the Jetson Orin Nano yields consistently higher bPQ and mPQ than the desktop GPU across both FP16 and TF32 configurations. This is unlikely to stem from reduced precision, since TF32 and FP16 produce near-identical metrics. A plausible explanation is that TensorRT's aggressive graph-level optimizations for the Jetson target architecture restructure the operator execution order in a way that benefits the model numerically. The absence of such gains on the older RTX 2080 Super (similarly running TensorRT) supports the hypothesis that the effect is architecture-specific rather than a universal property of engine compilation.
 
 \section{Ablation Study}
 \label{sec:ablation}
@@ -108,7 +122,11 @@ results for $R \in \{8, 16, 32, 64\}$.
 
 \input{contents/chapter-4/tab/ablation-rays}
 
-Surprisingly, increasing the number of rays from $R=8$ to $R=64$ yields only a modest overall performance improvement. The most notable gain occurs in mPQ, suggesting that the angular resolution of the ray representation primarily affects how the model resolves individual nuclei instances rather than detection accuracy. Beyond $R=16$, the returns diminish, with $R=32$ and $R=64$ producing nearly indistinguishable results. Additionally, the standard deviations across all ray configurations do not differ significantly, indicating that the ray count has minimal influence on prediction consistency. This however contrasts with the representation-level results in Table~\ref{tab:raycast-iou}, where increasing the ray count from $R=8$ to $R=64$ substantially improved mask IoU at the geometric level. The fact that this geometric improvement does not proportionally translate to model performance reveals a current limitation: the network is not able to exploit the higher angular precision offered by denser ray configurations.
+Increasing the number of rays from $R=8$ to $R=64$ yields only modest overall performance improvement: bPQ rises from 0.5902 to 0.6024, while mPQ is non-monotonic, peaking at $R=16$ (0.4606) and then declining slightly at $R=32$ and $R=64$. The standard deviations across all ray configurations do not differ significantly, indicating that the ray count has minimal influence on prediction consistency. This behavior admits a simple explanation rooted in nuclear morphology.
+
+The majority of nuclei in H\&E histopathology are approximately elliptical, a consequence of the convexity enforced by the nuclear lamina discussed in Section~\ref{sec:raycast-validation} and Section~\ref{sec:nuclear-morphology}. An elliptical target is well-approximated by a polygon with as few as eight rays, so the model learns to predict smooth elliptical envelopes regardless of the available angular resolution. Even at $R=64$, the network has the capacity to draw 64 independent rays but defaults to an ellipse-like shape because doing so already covers most of the nuclear area and achieves good overlap with the ground truth. This learned elliptical prior is sufficient for the common case but hurts on the minority of irregularly shaped nuclei (pleomorphic malignant cells, overlapping boundaries) where finer angular detail would actually help; the model cannot break out of its elliptical default to exploit the extra boundary resolution that denser rays offer.
+
+Importantly, this is not a limitation of the representation itself. Section~\ref{sec:raycast-validation} (Table~\ref{tab:raycast-iou}) showed that increasing $R$ substantially improves the geometric mask IoU at the representation level, so the polygon parameterization is sound. The bottleneck is model capacity: RayCastED-B, at 2.6M parameters, is the smallest variant in the family and converges to the easy elliptical solution rather than learning the boundary-discrimination features that denser rays would require. A larger backbone could potentially exploit the higher angular resolution, leaving this as a direction for future work.
 
 \subsection{Study on Different Wavelet}
 \label{sec:ablation-wavelet}

@@ -24,6 +24,7 @@ Histopathology is the study of tissue disease through microscopic examination of
 The cell nucleus is a membrane-bound organelle containing genetic material and serves as the primary structure of interest in histopathological analysis. Nuclear morphology, including size, shape, texture, and spatial distribution, provides critical diagnostic information. In cancer diagnosis, malignant cells often exhibit nuclear atypia: enlarged nuclei, irregular shapes, hyperchromasia (increased staining intensity), and abnormal mitotic figures.
 
 \subsubsection{Nuclear Morphology and Shape Characteristics}
+\label{sec:nuclear-morphology}
 
 The shape of cell nuclei varies considerably across tissue types and pathological states, but the majority of nuclei encountered in routine H\&E-stained histopathology sections exhibit a defining geometric property: they are \textbf{approximately convex}. This convexity is not coincidental but reflects the underlying nuclear mechanics. The nucleus is enclosed by the nuclear envelope, a double-membrane structure reinforced by the nuclear lamina, a meshwork of intermediate filament proteins (A-type and B-type lamins) that provides structural rigidity \cite{lammerding2011mechanics}. Combined with the chromatin organization in the nuclear interior, this envelope makes the nucleus the stiffest organelle in the cell, approximately 5--10 times stiffer than the surrounding cytoskeleton \cite{lammerding2011mechanics}. As a result, nuclei in tissue maintain smooth, regular contours even under moderate mechanical load.
 
@@ -183,6 +184,13 @@ This sparse-per-instance prediction makes contour-based methods architecturally 
 \label{sec:detection-model}
 
 A detection model predicts, in a single forward pass, a set of object instances each described by a class label and a geometric boundary. In standard object detection the geometric primitive is the axis-aligned bounding box (bbox), defined by its center coordinates $(x, y)$, width $w$, and height $h$. For each spatial location on the prediction grid the model produces two parallel outputs: a \textbf{classification head} that emits per-class probabilities, and a \textbf{regression head} that emits offsets relative to a predefined reference box (the anchor), yielding the final bbox parameters. Compared to mask-based segmentation, detection is sparse: the model produces a fixed number of per-grid-cell predictions rather than one prediction per pixel.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\textwidth]{contents/chapter-3/fig/paradigm comparison.pdf}
+	\caption[Mechanism of different deep learning paradigms.]{Mechanism of different deep learning paradigms. Left: mask-based instance segmentation produces a dense per-pixel class map, where each pixel is classified as background or assigned to a specific instance. Center: object detection predicts axis-aligned bounding boxes around each instance, providing coarse localization without boundary detail. Right: contour-based instance segmentation predicts a sparse set of geometric boundary parameters (e.g., radial distances from a centroid), combining the boundary fidelity of mask-based methods with the sparse, grid-based prediction structure of detection.}
+	\label{fig:paradigm-comparison}
+\end{figure}
 
 The bounding box is sufficient for general object detection tasks such as recognizing pedestrians or vehicles, where downstream applications only require coarse localization. It is, however, insufficient for nuclei analysis. The bbox disregards the geometric boundary of the nucleus: its axis-aligned rectangle includes large empty corners that do not belong to the cell, and it cannot represent the elliptical or pleomorphic contours that distinguish fibroblasts, epithelial cells, and malignant nuclei. In densely packed tissue, the empty corners of adjacent bboxes overlap heavily, making it impossible to attribute a pixel to a unique cell on the basis of bbox membership alone. This is precisely the gap that contour-based instance segmentation closes: it retains the detection model's sparse, grid-based prediction structure but replaces the bbox regression target with a boundary-aware geometric descriptor.
 
