@@ -21,7 +21,20 @@ The novelty of this research lies in the development of RayCastED, which propose
 
 Histopathology is the study of tissue disease through microscopic examination of tissue samples. In clinical practice, tissue specimens are collected through biopsy or surgical resection and processed for microscopic analysis. The tissue undergoes fixation (typically in formalin) to preserve cellular structures, followed by embedding in paraffin wax, sectioning into thin slices, and mounting on glass slides for staining and visualization.
 
-The cell nucleus is a membrane-bound organelle containing genetic material and serves as the primary structure of interest in histopathological analysis. Nuclear morphology, including size, shape, texture, and spatial distribution, provides critical diagnostic information. In cancer diagnosis, malignant cells often exhibit nuclear atypia: enlarged nuclei, irregular shapes, hyperchromasia (increased staining intensity), and abnormal mitotic figures.
+\subsubsection{Anatomy of the Cell}
+\label{sec:cell-anatomy}
+
+A eukaryotic cell consists of three principal structural compartments: the cell (plasma) membrane, the cytoplasm, and the nucleus \cite{campbell2020biology}. The cell membrane is a phospholipid bilayer that encloses the cell and regulates molecular transport between the intracellular and extracellular environments. The cytoplasm is the region between the membrane and the nucleus, containing organelles, the cytoskeleton, and the cytosol, a viscous aqueous solution of proteins, metabolites, and ions. The nucleus is a double-membrane-enclosed organelle that houses the cell's genetic material (DNA organized as chromatin) and serves as the control center for gene expression and DNA replication \cite{campbell2020biology}.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.38\textwidth]{contents/chapter-2/fig/cell-structure.png}
+	\includegraphics[width=0.38\textwidth]{contents/chapter-2/fig/hne-slide.png}
+	\caption[Cell anatomy and H\&E contrast.]{Cell anatomy and the H\&E visibility contrast. Left: schematic cross-section of a eukaryotic cell showing the nucleus, cytoplasm, and cell membrane. Right: H\&E-stained histopathology tile (PUMA dataset) showing clearly visible nuclei (dark blue/purple) against cytoplasm (pink) where individual cell boundaries are indistinct, motivating nucleus-centric segmentation.}
+	\label{fig:cell-anatomy-he}
+\end{figure}
+
+In computational histopathology, the nucleus, not the whole cell, is the primary target for detection and segmentation, for three reasons \cite{irshad2014methods,xing2016robust}. First, under standard H\&E staining, hematoxylin (a basic dye) binds strongly to acidic DNA and RNA, rendering nuclei dark blue or purple and highly visible under brightfield microscopy. Eosin (an acidic dye) stains cytoplasmic proteins pink but produces far weaker contrast, such that individual cell boundaries are indistinct and nearly impossible to delineate reliably in most tissue types \cite{feldman2014he}. Second, the cytoplasm of most tissue cells lacks intrinsic texture or membrane-bound landmarks, meaning that even with specialized cell-membrane stains, cytoplasmic segmentation remains an open challenge. Third, the nucleus is typically the largest and most visually prominent intracellular structure; in many cell types, the cytoplasm forms only a thin perinuclear envelope, so nuclear shape and size serve as effective proxies for overall cell morphology \cite{lammerding2011mechanics}. Because the nuclear lamina provides mechanical stiffness and maintains smooth, regular contours, the nuclear boundary carries substantially more geometrically informative signal than the cytoplasm, making it the natural target for instance segmentation in H\&E histopathology.
 
 \subsubsection{Nuclear Morphology and Shape Characteristics}
 \label{sec:nuclear-morphology}

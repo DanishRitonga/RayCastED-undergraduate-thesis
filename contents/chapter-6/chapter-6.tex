@@ -2,7 +2,7 @@
 
 \section{Conclusions}
 
-This thesis presented RayCastED, a lightweight, fully convolutional, end-to-end model for nuclei detection and segmentation
+This research presented RayCastED, a lightweight, fully convolutional, end-to-end model for nuclei detection and segmentation
 in histopathology images. Unlike prior methods that rely on dense per-pixel prediction and handcrafted post-processing
 (NMS, watershed, or flow-field), RayCastED formulates the task as a sparse regression problem on an anchor grid and produces
 final instance masks in a single forward pass. The key findings are summarized below.
@@ -17,7 +17,7 @@ LKCell (699.7M parameters), while sharing the same $O(n)$ linear time complexity
 post-hoc-processing-free design. The ablation studies confirm that the Haar wavelet DWT (ResoConv) is the most impactful
 architectural component, sweeping all five evaluation metrics against alternative wavelet bases. The ray count ablation
 reveals that the model converges to an elliptical default and does not exploit the extra angular precision offered by
-denser ray configurations -- a capacity limitation of the small backbone that motivates further research.
+denser ray configurations, a capacity limitation of the small backbone that motivates further research.
 
 \paragraph{Edge Deployment Feasibility}
 The smallest variant (RayCastED-S, 0.81M parameters) demonstrates viable inference on the Jetson Orin Nano embedded AI
@@ -41,7 +41,7 @@ Several directions warrant further investigation:
 	\item \textbf{Larger backbones to exploit ray density.} The ray-count ablation (Section~\ref{sec:ablation-rays})
 	      revealed that RayCastED-B converges to an elliptical default and does not exploit the extra angular precision
 	      offered by denser ray configurations, even though the representation itself supports finer boundary detail
-	      (Table~\ref{tab:raycast-iou}). Scaling the backbone -- while preserving the lightweight design philosophy --
+	      (Table~\ref{tab:raycast-iou}). Scaling the backbone, while preserving the lightweight design philosophy,
 	      could allow the model to break out of this elliptical prior and discriminate finer boundary features on
 	      irregularly shaped nuclei.
 	\item \textbf{Adaptive ray density.} The current fixed ray count ($R = 64$) applies uniformly to all nuclei regardless

@@ -99,7 +99,7 @@ This research encompasses five interconnected components, illustrated in Figure~
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.95\textwidth]{contents/chapter-3/fig/ETL.pdf}
+	\includegraphics[width=1.1\textwidth]{contents/chapter-3/fig/ETL.pdf}
 	\caption{High-level Pipeline Design}
 	\label{fig:data-preprocessing}
 \end{figure}
@@ -138,16 +138,23 @@ The RayCast representation models a nucleus as a star-convex polygon with a fixe
 
 where $c$ is the class label, $(c_x, c_y)$ is the centroid, $R$ is the number of rays (set to 32 in this study and constrained to be a multiple of 4), and $d_r$ is the Euclidean distance from the centroid to the polygon boundary along ray $r$ at angle $\theta_r = r \cdot 2\pi / R$. The angular convention is $\theta_0 = 0$ (east, $+X$ axis), increasing counter-clockwise. This representation is fully reversible: given the centroid and radial distances, the polygon can be reconstructed by placing vertices at $\mathbf{V}_r = \mathbf{P} + d_r \cdot \mathbf{D}_r$ and connecting them cyclically, where $\mathbf{D}_r = (\cos\theta_r,\; \sin\theta_r)^\top$.
 
-The fixed-length structure is essential for deep learning: it allows the network to predict polygon parameters as a regression task with a constant number of output channels, independent of the nuclear shape complexity. The star-convex constraint ensures that the resulting polygon is always simple and topologically valid, unlike unconstrained point sequences that may produce self-intersecting or degenerate boundaries.
-
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.55\textwidth]{contents/chapter-3/fig/RayCasting.pdf}
+    \includegraphics[width=0.75\textwidth]{contents/chapter-3/fig/RayCasting.pdf}
     \caption[Ray casting mechanism to generate RayCast representation.]{Ray casting mechanism to generate RayCast representation.}
     \label{fig:raycast-generation}
 \end{figure}
 
-The generation pipeline assumes it receives a standard polygon $\mathcal{P}$ defined by an ordered set of $K$ vertices $\{\mathbf{V}_j\}_{j=0}^{K-1}$ in $\mathbb{R}^2$, where the specific source format (binary masks, GeoJSON coordinates, or integer label maps) has been resolved by the dataset-specific ingestor described in Section~\ref{sec:ingestion}. The generation proceeds through several steps.
+The fixed-length structure is essential for deep learning: it allows the network to predict polygon parameters as a regression task with a constant number of output channels, independent of the nuclear shape complexity. The star-convex constraint ensures that the resulting polygon is always simple and topologically valid, unlike unconstrained point sequences that may produce self-intersecting or degenerate boundaries.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{contents/chapter-3/fig/RayCast-generation.pdf}
+    \caption[RayCast representation generation pipeline.]{RayCast representation generation pipeline.}
+    \label{fig:raycast-generation-pipeline}
+\end{figure}
+
+The generation pipeline requires a standard polygon contour $\mathcal{P}$ defined by an ordered set of $K$ vertices $\{\mathbf{V}_j\}_{j=0}^{K-1}$ in $\mathbb{R}^2$, where the specific source format (binary masks, GeoJSON coordinates, or integer label maps) has been resolved by the dataset-specific ingestor described in Section~\ref{sec:ingestion}. The generation proceeds through several steps.
 
 \paragraph{Raster Mask to Contour Extraction}
 Datasets such as PanNuke and MoNuSAC provide per-cell binary raster masks rather than polygon coordinates. For each cell, the binary mask is decoded and contour vertices are extracted via Moore-neighbor tracing (OpenCV's \texttt{findContours} with \texttt{CHAIN\_APPROX\_NONE}) to preserve full boundary fidelity. When a mask produces multiple contours, only the contour with the largest enclosed area is retained. Contours with fewer than 3 vertices are discarded.
@@ -181,7 +188,7 @@ An edge segment from $\mathbf{V}_j$ to $\mathbf{V}_{j+1}$ with edge vector $\mat
     \mathbf{Q}_j(s) = \mathbf{V}_j + s \, \mathbf{E}_j, \quad s \in [0, 1]
 \end{equation}
 
-Both equations describe the same geometric primitive -- a line -- differing only in their parameter bounds. The ray is unbounded on one side ($t \geq 0$) and the edge segment is bounded on both sides ($s \in [0, 1]$). Their intersection reduces to solving two linear equations.
+Both equations describe the same geometric primitive (a line), differing only in their parameter bounds. The ray is unbounded on one side ($t \geq 0$) and the edge segment is bounded on both sides ($s \in [0, 1]$). Their intersection reduces to solving two linear equations.
 
 Setting $\mathbf{L}_r(t) = \mathbf{Q}_j(s)$ and defining the offset $\mathbf{F}_j = \mathbf{V}_j - \mathbf{P}$ yields a $2 \times 2$ linear system:
 
@@ -453,7 +460,7 @@ Dual-label assignment (Section~\ref{sec:dual-label}) eliminates NMS by enforcing
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.65\textwidth]{contents/chapter-3/fig/ResoConv.pdf}
+	\includegraphics[width=0.85\textwidth]{contents/chapter-3/fig/ResoConv.pdf}
 	\caption{ResoConv Block Architecture}
 	\label{fig:resoconv}
 \end{figure}
@@ -532,25 +539,25 @@ The o2o branch uses classification-only task-aligned matching ($\text{cls}^{\alp
 The total training loss combines five terms:
 
 \begin{equation}
-    \mathcal{L} = \lambda_{\text{cls}} \mathcal{L}_{\text{cls}} + \lambda_{\text{xy}} \mathcal{L}_{\text{xy}} + \lambda_{\text{L1}} \mathcal{L}_{\text{L1}} + \lambda_{\text{piou}} \mathcal{L}_{\text{piou}} + \lambda_{\text{smooth}} \mathcal{L}_{\text{smooth}}
+    \mathcal{L} = \lambda_{\text{cls}} \mathcal{L}_{\text{cls}} + \lambda_{\text{xy}} \mathcal{L}_{\text{xy}} + \lambda_{\text{rays}} \mathcal{L}_{\text{rays}} + \lambda_{\text{piou}} \mathcal{L}_{\text{piou}} + \lambda_{\text{smooth}} \mathcal{L}_{\text{smooth}}
 \end{equation}
 
-with weights $\lambda_{\text{cls}} = 2.0$, $\lambda_{\text{xy}} = 500.0$, $\lambda_{\text{L1}} = 14.0$, $\lambda_{\text{piou}} = 3.0$, and $\lambda_{\text{smooth}}$ annealed from 0 to 3 over the first 40\% of training. Each branch (o2m and o2o) computes this loss independently, and the two are combined using the o2m/o2o weight schedule described above.
+with weights $\lambda_{\text{cls}} = 2.0$, $\lambda_{\text{xy}} = 500.0$, $\lambda_{\text{rays}} = 14.0$, $\lambda_{\text{piou}} = 3.0$, and $\lambda_{\text{smooth}}$ annealed from 0 to 3 over the first 40\% of training. Each branch (o2m and o2o) computes this loss independently, and the two are combined using the o2m/o2o weight schedule described above.
 
 The classification loss differs between branches. The o2m head uses focal loss ($\gamma = 2.0$, $\alpha = 0.75$) with background subsampling at a 3:1 ratio of background to foreground anchors. Background subsampling addresses the extreme foreground--background imbalance inherent in nuclei detection: in a typical $256 \times 256$ tile with three pyramid levels, the anchor grid produces tens of thousands of predictions, while only a few hundred correspond to actual nuclei. Computing the loss over all background anchors would drown the foreground gradient signal. Subsampling randomly retains a 3:1 ratio of background to foreground anchors before loss evaluation, suppressing the dominant background contribution while preserving enough easy negatives to anchor the decision boundary. The o2o head, using the split classification design, applies focal loss ($\gamma = 2.0$, $\alpha = 0.75$) on the binary foreground/background head across all anchors, and binary cross-entropy on the multiclass head restricted to foreground anchors only; the one-to-one assignment already eliminates the imbalance problem, so no subsampling is applied.
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.5\textwidth]{contents/chapter-3/fig/L_rays.pdf}
-    \caption[Ray distance loss computation.]{Ray distance loss computation. The analytical ray distances are recomputed from the predicted centroid, and the log-space L1 loss is evaluated between the predicted and analytical distances.}
+	\includegraphics[width=0.7\textwidth]{contents/chapter-3/fig/L_rays.pdf}
+    \caption[Ray distance loss visualization.]{Ray distance loss visualization. The analytical ray distances are recomputed from the predicted centroid, and the log-space L1 loss is evaluated between the predicted and analytical distances.}
 	\label{fig:l-rays}
 \end{figure}
 
 
-The ray distance loss $\mathcal{L}_{\text{L1}}$ is the most distinctive component. During data ingestion, ground-truth ray distances are computed by casting rays from the annotation centroid to the polygon boundary using geometric line intersection. During training, this same raycasting operation is reformulated as a differentiable Cramer's rule solver that computes analytical ray distances from the \emph{predicted} centroid (with gradients detached) to the ground-truth polygon boundary. The loss is then evaluated in log-space:
+The ray distance loss $\mathcal{L}_{\text{rays}}$ is the most distinctive component. During data ingestion, ground-truth ray distances are computed by casting rays from the annotation centroid to the polygon boundary using geometric line intersection. During training, this same raycasting operation is reformulated as a differentiable Cramer's rule solver that computes analytical ray distances from the \emph{predicted} centroid (with gradients detached) to the ground-truth polygon boundary. The loss is then evaluated in log-space:
 
 \begin{equation}
-    \mathcal{L}_{\text{L1}} = \frac{1}{R} \sum_{i=1}^{R} \left| \log(\hat{d}_i + \varepsilon) - \log(d_i^{\text{analytical}} + \varepsilon) \right|
+    \mathcal{L}_{\text{rays}} = \frac{1}{R} \sum_{i=1}^{R} \left| \log(\hat{d}_i + \varepsilon) - \log(d_i^{\text{analytical}} + \varepsilon) \right|
 \end{equation}
 
 This analytical recomputation couples centroid accuracy from ray supervision: the ray head is always judged against geometrically correct targets for the position where the model actually placed the centroid, rather than against static targets computed from the ground-truth centroid. If the predicted centroid shifts from the ground-truth centroid, the target rays adapt accordingly, preventing conflicting gradient signals between the centroid and ray branches. Log-space evaluation provides scale-invariant gradients, applying equal relative penalty for over-prediction and under-prediction regardless of absolute ray length.
@@ -560,7 +567,7 @@ The centroid loss $\mathcal{L}_{\text{xy}}$ uses Huber loss ($\delta = 0.05$) on
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.5\textwidth]{contents/chapter-3/fig/L_piou.pdf}
+	\includegraphics[width=0.4\textwidth]{contents/chapter-3/fig/L_piou.pdf}
     \caption[PolarIoU loss computed through sector-area decomposition.]{PolarIoU loss computed through sector-area decomposition. Each adjacent pair of rays forms a triangular sector, and the IoU is computed analytically from the sector intersections without rasterization.}
 	\label{fig:l-piou}
 \end{figure}
@@ -586,13 +593,13 @@ Since $\frac{1}{2} \cdot \sin(2\pi/R)$ is identical for all sectors, the IoU rat
     \text{PolarIoU} = \frac{\sum_{i=0}^{R-1} \min(d_i, \hat{d}_i) \cdot \min(d_{i+1}, \hat{d}_{i+1})}{\sum_{i=0}^{R-1} \max(d_i, \hat{d}_i) \cdot \max(d_{i+1}, \hat{d}_{i+1})}
 \end{equation}
 
-with cyclic indexing $d_R \equiv d_0$, and the loss is $\mathcal{L}_{\text{piou}} = -\log(\text{PolarIoU})$. The sector-area formulation couples adjacent rays through the product $d_i \cdot d_{i+1}$, ensuring each ray prediction contributes to two overlapping sectors and propagating gradient information across angular neighbors. Additionally, our formulation computes PolarIoU using the analytical ground-truth rays derived from the predicted centroid (consistent with $\mathcal{L}_{\text{L1}}$), rather than static ground-truth rays as in the original PolarMask.
+with cyclic indexing $d_R \equiv d_0$, and the loss is $\mathcal{L}_{\text{piou}} = -\log(\text{PolarIoU})$. The sector-area formulation couples adjacent rays through the product $d_i \cdot d_{i+1}$, ensuring each ray prediction contributes to two overlapping sectors and propagating gradient information across angular neighbors. Additionally, the formulation computes PolarIoU using the analytical ground-truth rays derived from the predicted centroid (consistent with $\mathcal{L}_{\text{rays}}$), rather than static ground-truth rays as in the original PolarMask.
 
 
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.5\textwidth]{contents/chapter-3/fig/L_smooth.pdf}
+	\includegraphics[width=0.7\textwidth]{contents/chapter-3/fig/L_smooth.pdf}
 	\caption[Smooth and jagged contour comparison.]{Smooth and jagged contour comparison. A smooth contour (left) varies linearly between adjacent rays and reconstructs a biologically plausible nuclear boundary, while a jagged contour (right) exhibits sharp, non-monotone oscillations that produce an implausible shape. The smoothness loss penalizes the latter by measuring deviation from local linearity along the circular ray sequence.}
 	\label{fig:l-smooth}
 \end{figure}
@@ -607,7 +614,7 @@ with cyclic indexing $d_{-1} \equiv d_{R-1}$ and $d_R \equiv d_0$. When all $d_i
 
 \subsubsection{Hyperparameter Tuning}
 
-Most optimization and schedule hyperparameters follow the YOLO26 defaults~\cite{sapkota2025yolo26}, on the rationale that RayCastED inherits the YOLO26 detection backbone and dual-label assignment machinery, so the optimizer settings validated for that architecture transfer directly. RayCastED-specific hyperparameters are concentrated in three areas: (1) the assignment parameters (topk values, $\alpha$, $\beta$, $\sigma$ scale) that adapt task-aligned matching to the PolarIoU metric; (2) the loss weights $\lambda_{\text{xy}}, \lambda_{\text{L1}}, \lambda_{\text{piou}}, \lambda_{\text{smooth}}$ that balance the new ray and PolarIoU terms against the detection-style classification and centroid losses; and (3) the inference confidence threshold, set to a low value (0.20) to test the model's raw ranking quality rather than relying on aggressive thresholding. The full set of training hyperparameters is consolidated in Table~\ref{tab:hyperparameters}.
+Most optimization and schedule hyperparameters follow the YOLO26 defaults~\cite{sapkota2025yolo26}, on the rationale that RayCastED inherits the YOLO26 detection backbone and dual-label assignment machinery, so the optimizer settings validated for that architecture transfer directly. RayCastED-specific hyperparameters are concentrated in three areas: (1) the assignment parameters (topk values, $\alpha$, $\beta$, $\sigma$ scale) that adapt task-aligned matching to the PolarIoU metric; (2) the loss weights $\lambda_{\text{xy}}, \lambda_{\text{rays}}, \lambda_{\text{piou}}, \lambda_{\text{smooth}}$ that balance the new ray and PolarIoU terms against the detection-style classification and centroid losses; and (3) the inference confidence threshold, set to a low value (0.20) to test the model's raw ranking quality rather than relying on aggressive thresholding. The full set of training hyperparameters is consolidated in Table~\ref{tab:hyperparameters}.
 
 \input{contents/chapter-3/tab/hyperparameters}
 

@@ -4,31 +4,32 @@
 
 Nuclei segmentation is a critical first step in the analysis of histopathological images from Whole Slide Images (WSIs), as it underpins many downstream processes such as tumor grading, cellular composition analysis, and biomarker quantification \cite{basu2023survey}. In recent years, deep learning (DL) has become the staple approach for performing nuclei segmentation, driven by its ability to learn hierarchical features directly from data \cite{basu2023survey,deng2020deep}. Despite these advances, one of the principal difficulties that DL models continue to face is the presence of clumped nuclei, which results in overlapping and touching instances that are difficult to separate accurately.
 
-Instance segmentation has emerged as the dominant paradigm for addressing this challenge, owing to its ability to classify individual objects as unique instances \cite{shephard2021simultaneous}. Among instance segmentation approaches, mask-based methods are the preferred choice in the literature \cite{nunes2025survey}. However, mask-based instance segmentation carries notable drawbacks. First, these methods are computationally heavy, typically relying on two-stage architectures or elaborate post-processing pipelines \cite{zhang2020mask}. Second, mask-based representations enforce pixel exclusivity: each pixel can belong to only one segment, which distorts morphology at contact boundaries where cells overlap \cite{eppel2020computer}.
+Instance segmentation has emerged as the dominant paradigm for addressing this challenge, owing to its ability to classify individual objects as unique instances \cite{shephard2021simultaneous}. Among instance segmentation approaches, mask-based methods are the preferred choice in the literature \cite{nunes2025survey}. However, mask-based instance segmentation carries notable drawbacks. First, these methods are computationally heavy, typically relying on two-stage architectures or elaborate post-hoc-processing pipelines \cite{zhang2020mask}. Second, mask-based representations enforce pixel exclusivity: each pixel can belong to only one segment, which distorts morphology at contact boundaries where cells overlap \cite{eppel2020computer}.
 
-An alternative line of work is contour-based instance segmentation, which represents objects through their boundary geometry rather than dense pixel masks. Contour-based methods offer two key advantages: they are inherently lighter, often employing single-stage architectures \cite{zhang2020mask}, and they can incorporate geometric priors into the representation prior to training \cite{xie2019polarmask}. Nevertheless, existing contour-based approaches remain dependent on non-maximum suppression (NMS) as a post-processing step, which adds computational overhead and risks removing valid predictions when instances are in close proximity \cite{schmidt2018cell}. Although vision transformer (ViT) based methods can eliminate the NMS dependency, they introduce substantially higher computational cost that limits their practicality.
+An alternative line of work is contour-based instance segmentation, which represents objects through their boundary geometry rather than dense pixel masks. Contour-based methods offer two key advantages: they are inherently lighter, often employing single-stage architectures \cite{zhang2020mask}, and they can incorporate geometric priors into the representation prior to training \cite{xie2019polarmask}. Nevertheless, existing contour-based approaches remain dependent on non-maximum suppression (NMS) as a post-hoc-processing step, which adds computational overhead and risks removing valid predictions when instances are in close proximity \cite{schmidt2018cell}. Although vision transformer (ViT) based methods can eliminate the NMS dependency, they introduce substantially higher computational cost that limits their practicality.
 
-This research proposes, \textbf{RayCastED}, a deep learning model that bridges the gap between these paradigms by combining three desirable properties. \textit{Geometry-awareness:} the model employs ray-prediction based on star-convex polygons to capture true cellular boundaries, enabling precise area and morphological measurements without classifying every pixel. \textit{Lightweight architecture:} the FCN backbone keeps computational overhead low, making the model suitable for edge deployment via TensorRT and ONNX Runtime. \textit{Truly end-to-end:} the architecture completely eliminates the need for NMS or other post-processing, allowing it to natively and accurately resolve dense, highly overlapping cellular scenarios while reducing inference overhead.
+This research proposes, \textbf{RayCastED}, a deep learning model that bridges the gap between these paradigms by combining three desirable properties. \textit{Geometry-awareness:} the model employs ray-prediction based on star-convex polygons to capture true cellular boundaries, enabling precise area and morphological measurements without classifying every pixel. \textit{Lightweight architecture:} the FCN architecture keeps computational overhead low, making the model suitable for edge deployment via TensorRT and ONNX Runtime. \textit{Truly end-to-end:} the architecture completely eliminates the need for NMS or other post-hoc-processing, allowing it to natively and accurately resolve dense, highly overlapping cellular scenarios while reducing inference overhead.
 
 \section{Problem Statement}
 
 Based on the background discussed above, the following problems are identified:
 
 \begin{enumerate}
-	\item Touching or overlapping nuclei introduce computational overhead.\\ 
-	Existing methods address clumped nuclei either through two-stage architectures, heavy post-processing pipelines such as NMS, or computationally expensive vision transformer (ViT) backbones. Each of these strategies imposes a significant computational burden that limits scalability to large WSIs.
+	\item Existing methods are heavily reliant on post-hoc-processing pipeline which imposes a significant computational burden.
+
+	\item Contour-based models need to be reevaluated and have been overlooked in favor of mask-based methods.
 	
-	\item State-of-the-art methods are not suitable for edge deployment\\
-	Current leading approaches to nuclei segmentation and detection are designed with computational assumptions that exceed the capabilities of resource-constrained edge devices. Deploying these models in clinical settings requires hardware that is often unavailable at the point of care.
+	\item Current leading approaches to nuclei instance segmentation are designed with computational assumptions that exceed the capabilities of resource-constrained edge computing devices.
 \end{enumerate}
 
 \section{Objectives}
 
-To address the identified problems, this thesis has the following objectives:
+To address the identified problems, this research has the following objectives:
 
 \begin{enumerate}
-	\item Develop \textbf{RayCastED} and evaluate the performance by comparing it against prior nuclei instance segmentation models.
-	\item Evaluate the deployment feasibility of RayCastED on edge devices.
+	\item Develop a deep learning architecture that is post-hoc-processing-free
+	\item Evaluate the performance of contour-based instance segmentation models by comparing it against prior nuclei instance segmentation models.
+	\item Evaluate the deployment feasibility of developed model on edge computing devices.
 \end{enumerate}
 
 \section{Research Scope}
@@ -38,7 +39,7 @@ This research is bounded by the following scope limitations:
 \begin{enumerate}
 	\item \textbf{Data characteristics:} The study uses only H\&E stained histopathology images with approximately 0.25 MPP (microns per pixel) resolution from publicly available secondary datasets. The datasets encompass multiple tissue types/organs.
 	
-	\item \textbf{Computational constraints:} Model training is performed on RTX 5070Ti hardware. Baseline comparisons are limited to models compatible with this hardware configuration.
+	\item \textbf{Computational constraints:} Model training is performed on NVIDIA RTX 5070Ti. Edge deployment is evaluated on NVIDIA Jetson Orin Nano. 
 	
 	\item \textbf{Validation approach:} The research employs computational validation using standard metrics. Pathologist or expert validation is not included in this study.
 	
@@ -63,4 +64,14 @@ The contributions of this research are as follows:
 
 \section{Presentation Structure}
 
-This thesis is organized into five chapters. Chapter~1 introduces the background, problem statement, objectives, and scope of the research. Chapter~2 reviews the literature on nuclei instance segmentation paradigms, the theoretical foundations of the proposed model components, and the evaluation metrics used throughout this work. Chapter~3 describes the methodology, covering datasets, the RayCast representation, the data pre-processing pipeline, the proposed model architecture components, and the training strategy. Chapter~4 presents the experimental results, including the RayCast representation validation, benchmarking against prior methods, edge deployment evaluation, and ablation studies. Chapter~5 concludes the thesis with a summary of findings and directions for future work.
+This thesis is organized into five chapters.
+
+\textbf{Chapter~1} introduces the background of nuclei segmentation in histopathology, identifies the research gaps in mask-based and contour-based approaches, and formulates the problem statement, objectives, scope, and contributions of the proposed RayCastED model.
+
+\textbf{Chapter~2} reviews related work in two parts. The first part surveys state-of-the-art nuclei instance segmentation methods through a structured literature table, contrasting mask-based, contour-based, and transformer-based approaches, and identifies the research gap that RayCastED fills. The second part establishes the theoretical foundations: cell anatomy and the rationale for targeting nuclei over whole cells in H\&E imagery, nuclear morphology and the convexity constraint, the overlapping nuclei problem, digital pathology imaging from tissue slicing to whole-slide scanning, H\&E staining principles, the Beer--Lambert law and optical density, Macenko's stain vector estimation via SVD, instance segmentation paradigms, and the evaluation metrics used in the experiments.
+
+\textbf{Chapter~3} describes the research methodology. It opens with the four-phase research workflow (literature review, geometry module and data pipeline development, model development, evaluation and ablation) before presenting the six public datasets used for training and benchmarking. The core of the chapter details the RayCast representation as a fixed-length vector of centroid and radial distances, the three-stage data preprocessing pipeline (ingestion, transform, loader) with stain normalization and raycast-aware augmentation, the model architecture modifications including ResoConv and RayCastDetect, and the training strategy with curriculum learning, combined loss, and cosine annealing schedule.
+
+\textbf{Chapter~4} presents and discusses the experimental results. It begins by validating the RayCast representation's approximation fidelity across ray counts, followed by an analysis of training convergence dynamics. Comprehensive benchmarking against StarDist, CPP-Net, CellViT, LKCell, HoVer-NeXt, and LSP-DETR on PanNuke is reported per tissue type, per nuclei type, and for computational efficiency. A zero-shot generalization test across MoNuSAC, panopTILs, and PUMA is presented, followed by edge deployment validation on the Jetson Orin Nano via TensorRT. The chapter closes with ablation studies on ray count and wavelet basis components.
+
+\textbf{Chapter~5} concludes the thesis with a summary of key findings on detection accuracy, edge deployment feasibility, and cross-dataset generalization, and outlines eight directions for future research including larger backbones, adaptive ray density, non-star-convex representations, domain adaptation, INT8 quantization, whole-slide image integration, and extension to other medical tasks.

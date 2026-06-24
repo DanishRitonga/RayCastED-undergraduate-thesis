@@ -2,7 +2,7 @@
 	\centering
 	\caption{Summary statistics of the mask IoU between ground truth nuclei and the ray-cast polygon approximation at varying numbers of rays $R$ (mean, standard deviation, median, minimum, and maximum IoU computed over 1{,}849 nuclei from the PanNuke validation set).}
 	\label{tab:raycast-iou}
-	\begin{tabular}{lcccc}
+	\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lcccc}
 		\hline
 		\textbf{Statistic} & \textbf{$R = 8$} & \textbf{$R = 16$} & \textbf{$R = 32$} & \textbf{$R = 64$} \\
 		\hline
@@ -12,5 +12,5 @@
 		Min    & 0.2727 & 0.2727 & 0.2667 & 0.2667 \\
 		Max    & 0.9224 & 0.9764 & 0.9843 & 0.9902 \\
 		\hline
-	\end{tabular}
+	\end{tabular*}
 \end{table}
