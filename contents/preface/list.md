@@ -1,0 +1,7 @@
+- Kadep
+- Kaprodi
+- Dosbing 1
+- Dosbing 2
+- Keluarga
+- Friends
+- Friend groups

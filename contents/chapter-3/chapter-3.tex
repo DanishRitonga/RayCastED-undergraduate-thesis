@@ -82,6 +82,13 @@ MoNuSAC \cite{verma2021monusac} provides annotated nuclei across multiple organ 
 
 This research is conducted on two devices. Training and evaluation are performed on a desktop workstation equipped with an NVIDIA GeForce RTX 5070 Ti GPU. Edge deployment evaluation is performed on an NVIDIA Jetson Orin Nano, an embedded inference platform sized for low-power on-device histopathology analysis.
 
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{contents/chapter-3/fig/env-setup.pdf}
+	\caption{Environmental setup for the training workstation and edge deployment platform.}
+	\label{fig:env-setup}
+\end{figure}
+
 All experiments run inside a \texttt{uv}-managed Python environment that pins Python~$\geq$~3.11 and PyTorch~$\geq$~2.11 as baseline requirements, with all transitive dependencies captured by a lockfile so that the training and edge environments remain reproducible across the two devices.
 
 \section{Methods}
@@ -243,7 +250,7 @@ connected cyclically. The angular direction vectors $\mathbf{D}_r$ are precomput
 \begin{figure}[H]
 	\centering
 	\resizebox{0.9\textwidth}{!}{\input{contents/chapter-3/fig/Ingestor-UML}}
-    \caption[UML class diagram of the modular ingestion pipeline.]{UML class diagram of the modular ingestion pipeline. \texttt{BaseDataIngestor} defines the shared infrastructure; concrete ingestors implement format-specific \texttt{process\_item} logic; all converge on the unified raycast annotation format via \texttt{RayCastGPU}.}
+    \caption[UML class diagram of the modular ingestion pipeline.]{UML class diagram of the modular ingestion pipeline. \texttt{BaseDataIngestor} defines the shared infrastructure; concrete ingestors implement format-specific \texttt{process\_item} logic; all converge on the unified raycast annotation format.}
 	\label{fig:ingestor-uml}
 \end{figure}
 
@@ -255,7 +262,7 @@ The architecture is built around an abstract base class that defines the contrac
 
 The base class provides a template method for \textbf{registry construction} in three phases: (1) file discovery and pairing, where image files are matched with annotation files using either bundled-archive (same file) or physical-parallel (paired directories) strategies; (2) split assignment, where each pair is assigned to train/val/test using physical subdirectory names, filename regex patterns, or stratified random sampling by tissue type; and (3) registry assembly into a work queue. A \textbf{two-step label translation} decouples source vocabularies from the global integer encoding: a namespace map $\mathcal{N}$ translates raw labels to standardized strings shared across all datasets, and a global cell map $\mathcal{G}$ maps standardized strings to integer class IDs. Adding a new dataset requires only a new namespace map. Similarly, all annotations are rescaled to a common target microns-per-pixel via \textbf{MPP harmonization}, scaling image dimensions and annotation coordinates uniformly by the ratio $\rho = \sigma_{\text{native}} / \sigma_{\text{target}}$.
 
-Concrete ingestors differ only in how they extract polygon vertices: mask-based sources decode compressed byte strings via Moore-neighbor contour tracing, while vector-based sources read polygon coordinates directly from geometry arrays or comma-separated coordinate strings requiring no rasterization. Mask-based ingestors process ROIs in parallel using a process pool, deferring GPU ray-cast conversion to the main process to avoid CUDA cross-process deadlock. All ingestors converge through a single conversion entry point, \texttt{RayCastGPU.batch\_polygon\_to\_raycast}, which receives the format-independent intermediate representation (variable-length vertex arrays and class labels) and produces the unified raycast annotation $\mathbf{A}$.
+Concrete ingestors differ only in how they extract polygon vertices: mask-based sources decode compressed byte strings via Moore-neighbor contour tracing, while vector-based sources read polygon coordinates directly from geometry arrays or comma-separated coordinate strings requiring no rasterization. Mask-based ingestors process ROIs in parallel using a process pool, deferring ray-cast conversion to the main process to avoid cross-process deadlock. All ingestors converge through a single conversion entry point, \texttt{RayCastEngine.batch\_polygon\_to\_raycast}, which receives the format-independent intermediate representation (variable-length vertex arrays and class labels) and produces the unified raycast annotation $\mathbf{A}$.
 
 The \texttt{IngestionOrchestrator} governs the end-to-end process: a string-keyed registry maps configuration keys to concrete ingestor classes, validated at both config-load time and runtime. A two-layer YAML hierarchy (global defaults overridden per dataset) enables declarative specification of all parameters. Row-level errors are caught and logged without terminating the remaining dataset, so a single corrupt ROI does not halt ingestion. This separation of concerns means that adding a new dataset typically requires only a YAML configuration entry with a namespace map and format key, while the computational core remains invariant across all sources.
 
@@ -524,15 +531,29 @@ Three annealing schedules progressively shift the training objective. First, the
 
 \subsubsection{Assignment}
 
-RayCastDetect uses two parallel instances of RayCastAssigner, which extends the task-aligned matching (Section~\ref{sec:tal}) strategy by replacing standard IoU with PolarIoU in the alignment metric. The one-to-many branch uses $\text{topk} = 15$ and $\text{topk}_2 = 15$ for dense multi-anchor supervision, while the one-to-one branch uses $\text{topk} = 7$ (candidate pool) and $\text{topk}_2 = 3 \to 1$ (annealed). The o2m alignment metric is:
+RayCastDetect uses two parallel instances of RayCastAssigner, which extends the task-aligned matching (Section~\ref{sec:tal}) strategy by replacing standard IoU with PolarIoU in the alignment metric. The one-to-many branch uses $\text{topk} = 15$ and $\text{topk}_2 = 15$ for dense multi-anchor supervision, while the one-to-one branch uses $\text{topk} = 7$ (candidate pool) and $\text{topk}_2 = 3 \to 1$ (annealed).
+
+The large $\text{topk} = 15$ in the o2m branch is essential during early training, when the model produces coarse predictions and needs multiple anchors per ground truth to receive rich gradient signals from diverse spatial positions. However, a static topk of 15 introduces a risk: nuclei vary widely in size, and a small nucleus may have fewer than 15 anchors within its effective spatial range. In such cases, a naive topk selection pads the positive set with the anchors nearest to the full topk count, anchors that have near-zero alignment metric and therefore carry no meaningful supervision, injecting false positive assignments that mislead the loss. To prevent this, dynamic topk applies a per-GT cap. Before topk selection, the alignment scores are zeroed below a threshold:
+
+\begin{equation}
+    \tilde{a}_i =
+    \begin{cases}
+        a_i, & a_i \geq \varepsilon \\
+        0,   & a_i < \varepsilon
+    \end{cases}
+    ,\qquad
+    \mathcal{P}_g = \text{topk}_{K}(\tilde{\mathbf{a}})
+\end{equation}
+
+where $K = 15$ is the nominal topk, $\tilde{\mathbf{a}}$ is the thresholded alignment score vector, $\mathcal{P}_g$ is the resulting set of positive anchor indices assigned to ground truth $g$, and $\varepsilon = 10^{-9}$. Since $\text{topk}$ selects the $K$ largest entries, anchors with zeroed scores are naturally excluded: only genuinely contributing anchors enter the positive set. A small nucleus with few valid anchors receives fewer than $K$ positives, while a large nucleus receives the full $K$. This gives the model rich multi-anchor guidance where warranted, while discarding anchors that would otherwise corrupt the gradient signal.
+
+The alignment metric for both branches is:
 
 \begin{equation}
     t = s^{\alpha} \cdot \text{PolarIoU}^{\beta} \cdot \exp\!\left(\frac{-d^2}{2\sigma^2}\right)
 \end{equation}
 
-where $s$ is the classification score, $\alpha = 0.5$, $\beta = 2.0$, $d$ is the centroid-to-anchor distance, and $\sigma$ is the per-nucleus radius computed as the 75th-percentile non-zero ray distance multiplied by a scale factor of 1.0. The inclusion of PolarIoU in the o2m metric ensures that early training prioritizes geometric quality: anchors are rewarded for producing well-shaped polygons, not just confident classifications. The Gaussian spatial decay term $\exp(-d^2 / 2\sigma^2)$ restricts high alignment scores to spatially proximate anchors, with $\sigma$ adapted to each nucleus size.
-
-The o2o branch uses classification-only task-aligned matching ($\text{cls}^{\alpha} \cdot \exp(-d^2/2\sigma^2)$, without PolarIoU), forcing the classification head to become the primary ranking signal. This matches inference conditions, where no localization feedback is available to resolve assignment ambiguity, and creates a self-reinforcing dynamic: higher classification confidence yields better assignments, which in turn produce stronger classification gradients.
+where $s$ is the classification score, $\alpha = 0.5$, $d$ is the centroid-to-anchor distance, and $\sigma$ is the per-nucleus radius computed as the 75th-percentile non-zero ray distance multiplied by a scale factor of 1.0. For the o2m branch, $\beta = 2.0$, so PolarIoU participates in the metric and ensures that anchors producing well-shaped polygons are prioritized over those with merely confident classifications. For the o2o branch, $\beta = 0$, collapsing the PolarIoU factor to 1; this matches inference conditions where no localization feedback is available, forcing the classification head to become the sole ranking signal and creating a self-reinforcing dynamic where higher confidence yields better assignments, which in turn produce stronger classification gradients. The Gaussian spatial decay term $\exp(-d^2 / 2\sigma^2)$ restricts high alignment scores to spatially proximate anchors, with $\sigma$ adapted to each nucleus size.
 
 \subsubsection{Loss Function}
 

@@ -265,66 +265,6 @@ Contour-based methods inherit both the strengths and the limitations of the dete
 \end{equation}
 which is computed greedily by iterating detections in descending confidence order. NMS is adequate when duplicated detections are well-separated from valid close neighbors, but it fails in dense nuclear clumps. There, adjacent cells produce predictions with high mutual IoU purely because their contours overlap, and NMS cannot distinguish a duplicate prediction of the same cell from two valid predictions of distinct neighboring cells. A low $\tau_{\text{nms}}$ aggressively removes duplicates but also suppresses valid detections of adjacent cells, systematically undercounting cells in the regions most relevant to clinical assessment; a high $\tau_{\text{nms}}$ preserves valid detections but leaves duplicates that inflate the count. This density-dependent counting bias is the central pathology that motivates NMS-free designs such as dual-label assignment with inter-scale competition, which replace the hand-tuned, post-hoc suppression with a learned, differentiable mechanism.
 
-\subsection{Convolutional Neural Networks}
-
-\subsubsection{Convolution and Feature Extraction}
-
-A convolutional layer applies a set of learnable filters (kernels) to an input feature map, producing an output feature map where each element is a weighted sum of local input elements. For a 2D convolution with input $\mathbf{X} \in \mathbb{R}^{H \times W \times C_{\text{in}}}$ and kernel $\mathbf{W} \in \mathbb{R}^{K \times K \times C_{\text{in}} \times C_{\text{out}}}$, the output at spatial position $(i,j)$ for channel $c$ is:
-
-\begin{equation}
-	\mathbf{Y}_{i,j,c} = \sum_{m=0}^{K-1} \sum_{n=0}^{K-1} \sum_{k=0}^{C_{\text{in}}-1} \mathbf{W}_{m,n,k,c} \cdot \mathbf{X}_{i+m, j+n, k} + b_c
-\end{equation}
-
-where $b_c$ is the bias term for output channel $c$. Each kernel slide across the input computes the same operation at every spatial position, exploiting the translation invariance of visual patterns. Stacking multiple convolutional layers with nonlinear activation functions (typically ReLU) enables the network to learn hierarchical feature representations: early layers capture low-level features such as edges and textures, while deeper layers capture higher-level structures such as cell shapes and tissue patterns.
-
-\subsubsection{Receptive Field and Kernel Size}
-
-The receptive field of a neuron in a convolutional network is the region of the input image that influences its output. For a single convolutional layer with kernel size $K$, each neuron has a receptive field of $K \times K$ pixels. Stacking $L$ convolutional layers, each with kernel size $K$ and stride 1, produces a receptive field of size $(K + (K-1)(L-1)) \times (K + (K-1)(L-1))$ at the deepest layer. Using stride $s > 1$ or pooling layers between convolutions further enlarges the effective receptive field.
-
-The kernel size directly determines the model's ability to capture spatial context. A $3 \times 3$ kernel sees only immediate neighbors, while a $7 \times 7$ kernel captures a larger local context. However, larger kernels increase the number of parameters quadratically: a $7 \times 7$ kernel has 5.4 times more parameters than a $3 \times 3$ kernel for the same number of channels. Modern architectures typically use small kernels ($3 \times 3$) stacked deeply to achieve large effective receptive fields while keeping the parameter count manageable.
-
-For nuclei detection, a sufficiently large receptive field is critical because nuclei can vary significantly in size, and contextual information from surrounding tissue helps distinguish nuclei from artifacts and debris. Methods such as LKCell \cite{cui2024lkcell} demonstrate that using large convolution kernels (e.g., $7 \times 7$ or larger) with structural reparameterization can achieve large receptive fields with lower computational cost than stacking many small-kernel layers.
-
-\subsubsection{Depthwise Convolution}
-\label{sec:depthwise-conv}
-
-Depthwise convolution is a spatial decomposition of the standard convolution operation that significantly reduces computational cost. In a standard convolution with $C_{\text{in}}$ input channels and $C_{\text{out}}$ output channels using a $K \times K$ kernel, the number of multiplications per spatial position is $K^2 \cdot C_{\text{in}} \cdot C_{\text{out}}$. Depthwise convolution decomposes this into two steps:
-
-\begin{enumerate}
-	\item \textbf{Depthwise step:} Each of the $C_{\text{in}}$ input channels is convolved independently with its own $K \times K$ kernel, producing $C_{\text{in}}$ intermediate feature maps. Cost: $K^2 \cdot C_{\text{in}}$ multiplications per position.
-	\item \textbf{Pointwise step:} A $1 \times 1$ convolution (pointwise convolution) then combines the $C_{\text{in}}$ intermediate maps into $C_{\text{out}}$ output channels. Cost: $C_{\text{in}} \cdot C_{\text{out}}$ multiplications per position.
-\end{enumerate}
-
-The total cost is $K^2 \cdot C_{\text{in}} + C_{\text{in}} \cdot C_{\text{out}}$ per position, compared to $K^2 \cdot C_{\text{in}} \cdot C_{\text{out}}$ for standard convolution. The reduction factor is approximately $K^2$, making depthwise convolution particularly effective for larger kernel sizes. This efficiency makes depthwise separable convolutions a key building block in lightweight architectures, as demonstrated by MobileNet \cite{howard2017mobilenets} and adopted in subsequent YOLO variants for efficient feature extraction.
-
-\subsection{Optimizers}
-
-The choice of optimizer plays a critical role in training deep neural networks, affecting both convergence speed and final model quality. This section reviews two optimizers relevant to the proposed RayCastED model.
-
-\subsubsection{Stochastic Gradient Descent with Momentum}
-
-Stochastic Gradient Descent (SGD) remains one of the most widely used optimization algorithms in deep learning. Given a loss function $\mathcal{L}(\theta)$ parameterized by $\theta$, SGD updates the parameters using the gradient of the loss estimated from a mini-batch of training samples:
-
-\begin{equation}
-    \theta_{t+1} = \theta_t - \eta \nabla_{\theta} \mathcal{L}(\theta_t)
-\end{equation}
-
-where $\eta$ is the learning rate. While simple, vanilla SGD can converge slowly in directions with low curvature and oscillate in directions with high curvature.
-
-Momentum \cite{sutskever2013momentum} addresses this by accumulating a velocity vector that smooths the gradient trajectory:
-
-\begin{equation}
-    v_{t+1} = \mu v_t + \nabla_{\theta} \mathcal{L}(\theta_t), \quad
-    \theta_{t+1} = \theta_t - \eta v_{t+1}
-\end{equation}
-
-where $\mu \in [0, 1)$ is the momentum coefficient (typically $\mu = 0.9$ or $\mu = 0.99$). The velocity term accelerates convergence in consistent gradient directions and dampens oscillations, significantly improving training stability.
-
-\subsubsection{Muon Optimizer}
-\label{sec:muon}
-
-The Muon optimizer \cite{chen2025muon} is a recent optimization algorithm designed for training neural networks with matrix-structured parameters. Muon applies Newton-Schulz orthogonalization to the gradient matrix at each step, implicitly constraining the spectral norm of the weight matrices during training. This spectral normalization has been shown to improve training stability and generalization \cite{chen2025muon}. Muon has demonstrated strong empirical performance in training vision and language models, achieving faster convergence than AdamW while maintaining comparable or better final accuracy.
-
 \subsection{Discrete Wavelet Transform}
 
 \subsubsection{Wavelet Decomposition Fundamentals}
@@ -366,6 +306,38 @@ Each subband has half the spatial resolution of the input in both dimensions. Th
 
 The key advantage of wavelet decomposition over standard downsampling (e.g., strided convolution or max pooling) is that it provides a principled frequency separation. Standard downsampling discards high-frequency information entirely, which can eliminate fine textures and edges critical for accurate boundary delineation. Wavelet decomposition preserves high-frequency details in the LH, HL, and HH subbands, making these details available for subsequent processing.
 
+\subsection{Convolutional Neural Networks}
+
+\subsubsection{Convolution and Feature Extraction}
+
+A convolutional layer applies a set of learnable filters (kernels) to an input feature map, producing an output feature map where each element is a weighted sum of local input elements. For a 2D convolution with input $\mathbf{X} \in \mathbb{R}^{H \times W \times C_{\text{in}}}$ and kernel $\mathbf{W} \in \mathbb{R}^{K \times K \times C_{\text{in}} \times C_{\text{out}}}$, the output at spatial position $(i,j)$ for channel $c$ is:
+
+\begin{equation}
+	\mathbf{Y}_{i,j,c} = \sum_{m=0}^{K-1} \sum_{n=0}^{K-1} \sum_{k=0}^{C_{\text{in}}-1} \mathbf{W}_{m,n,k,c} \cdot \mathbf{X}_{i+m, j+n, k} + b_c
+\end{equation}
+
+where $b_c$ is the bias term for output channel $c$. Each kernel slide across the input computes the same operation at every spatial position, exploiting the translation invariance of visual patterns. Stacking multiple convolutional layers with nonlinear activation functions (typically ReLU) enables the network to learn hierarchical feature representations: early layers capture low-level features such as edges and textures, while deeper layers capture higher-level structures such as cell shapes and tissue patterns.
+
+\subsubsection{Receptive Field and Kernel Size}
+
+The receptive field of a neuron in a convolutional network is the region of the input image that influences its output. For a single convolutional layer with kernel size $K$, each neuron has a receptive field of $K \times K$ pixels. Stacking $L$ convolutional layers, each with kernel size $K$ and stride 1, produces a receptive field of size $(K + (K-1)(L-1)) \times (K + (K-1)(L-1))$ at the deepest layer. Using stride $s > 1$ or pooling layers between convolutions further enlarges the effective receptive field.
+
+The kernel size directly determines the model's ability to capture spatial context. A $3 \times 3$ kernel sees only immediate neighbors, while a $7 \times 7$ kernel captures a larger local context. However, larger kernels increase the number of parameters quadratically: a $7 \times 7$ kernel has 5.4 times more parameters than a $3 \times 3$ kernel for the same number of channels. Modern architectures typically use small kernels ($3 \times 3$) stacked deeply to achieve large effective receptive fields while keeping the parameter count manageable.
+
+For nuclei detection, a sufficiently large receptive field is critical because nuclei can vary significantly in size, and contextual information from surrounding tissue helps distinguish nuclei from artifacts and debris. Methods such as LKCell \cite{cui2024lkcell} demonstrate that using large convolution kernels (e.g., $7 \times 7$ or larger) with structural reparameterization can achieve large receptive fields with lower computational cost than stacking many small-kernel layers.
+
+\subsubsection{Depthwise Convolution}
+\label{sec:depthwise-conv}
+
+Depthwise convolution is a spatial decomposition of the standard convolution operation that significantly reduces computational cost. In a standard convolution with $C_{\text{in}}$ input channels and $C_{\text{out}}$ output channels using a $K \times K$ kernel, the number of multiplications per spatial position is $K^2 \cdot C_{\text{in}} \cdot C_{\text{out}}$. Depthwise convolution decomposes this into two steps:
+
+\begin{enumerate}
+	\item \textbf{Depthwise step:} Each of the $C_{\text{in}}$ input channels is convolved independently with its own $K \times K$ kernel, producing $C_{\text{in}}$ intermediate feature maps. Cost: $K^2 \cdot C_{\text{in}}$ multiplications per position.
+	\item \textbf{Pointwise step:} A $1 \times 1$ convolution (pointwise convolution) then combines the $C_{\text{in}}$ intermediate maps into $C_{\text{out}}$ output channels. Cost: $C_{\text{in}} \cdot C_{\text{out}}$ multiplications per position.
+\end{enumerate}
+
+The total cost is $K^2 \cdot C_{\text{in}} + C_{\text{in}} \cdot C_{\text{out}}$ per position, compared to $K^2 \cdot C_{\text{in}} \cdot C_{\text{out}}$ for standard convolution. The reduction factor is approximately $K^2$, making depthwise convolution particularly effective for larger kernel sizes. This efficiency makes depthwise separable convolutions a key building block in lightweight architectures, as demonstrated by MobileNet \cite{howard2017mobilenets} and adopted in subsequent YOLO variants for efficient feature extraction.
+
 \subsubsection{Wavelet-Based Downsampling in CNNs}
 \label{sec:dwt-cnn}
 
@@ -375,52 +347,62 @@ The wavelet-based downsampling operation can be expressed as follows. Given a fe
 
 This design is particularly relevant for nuclei detection, where cell boundaries are defined by fine high-frequency edges in the H\&E image. By preserving these details through the downsampling hierarchy, wavelet-based networks can maintain boundary-aware features at deeper layers where the detection head operates. WaveConvX \cite{zhang2025waveconvx} demonstrates this principle in the context of histopathology image classification, showing that wavelet integration improves feature quality for FCN-based architectures.
 
-\subsection{Star-Convex Object Representation}
 
-\subsubsection{Geometric Definitions}
+\subsection{End-to-End Optimization}
+\label{sec:e2e-optimization}
 
-\begin{figure}[htbp]
-	\centering
-	\input{contents/chapter-2/fig/geometry-definitions}
-    \caption[Illustration of convex and star-shaped polygons.]{Illustration of convex and star-shaped polygons. (a) A convex polygon: the segment $\overline{q_1 q_2}$ connecting any two interior points lies entirely within the polygon. (b) A star-shaped polygon that is not convex: the kernel point $z$ (near the center) sees all boundary vertices (dashed green), yet the segment $\overline{q_1 q_2}$ connecting two interior points exits the polygon, demonstrating that the interior is not a convex set.}
-	\label{fig:geometry-definitions}
-\end{figure}
+\subsubsection{Optimizers}
 
-A \textbf{convex polygon} is a polygon whose interior forms a convex set. A polygon $P$ is convex if its interior region is a convex set \cite{preparata1985}. A region $R$ is a convex set if, for any two points $q_1$ and $q_2$ in $R$, the segment $\overline{q_1 q_2}$ is entirely contained in $R$ \cite{preparata1985}. Intuitively, for a convex polygon, the line segment connecting any two points inside the polygon lies entirely within the polygon, and no interior angle exceeds $180^\circ$.
+The choice of optimizer plays a critical role in training deep neural networks, affecting both convergence speed and final model quality. This section reviews two optimizers relevant to the proposed RayCastED model.
 
-A \textbf{star-shaped polygon} generalizes the notion of convexity. A polygon $P$ is star-shaped if there exists a point $z$ not external to $P$ such that for all points $p$ of $P$, the line segment $\overline{zp}$ lies entirely within $P$ \cite{preparata1985}. The set of all such points $z$ is called the \textit{kernel} of the polygon. A star-shaped polygon can be viewed as one where there is at least one interior point visible to every other point in the polygon. Every convex polygon is star-shaped (the kernel is the entire interior), but a star-shaped polygon may have indentations that make it non-convex.
+\subsubsubsection{Stochastic Gradient Descent with Momentum}
 
-A \textbf{star-convex polygon} is a polygon $P$ that is simultaneously star-shaped and convex. This dual property makes star-convex polygons particularly useful for representing cell nuclei: because they are convex, every boundary point can be uniquely described by a single ray emanating from the centroid, and because they are star-shaped, the centroid can be placed at a kernel point where all such rays intersect the boundary exactly once. In polar coordinates, a star-convex polygon centered at its centroid $\mathbf{c}$ can therefore be completely represented by a set of radial distances $\{d_0, d_1, \ldots, d_{n-1}\}$ measured at $n$ fixed angular intervals from the centroid to the boundary.
-
-\subsubsection{Suitability for Nuclei Representation}
-
-The star-convex polygon representation is well-suited for representing cell nuclei because of their characteristic morphology. The majority of cell nuclei encountered in H\&E-stained tissue sections are approximately convex or roundish in shape \cite{weigert2022stardist}. Healthy epithelial nuclei are round or elliptical, fibroblasts and endothelial cells are elongated but convex, and even malignant nuclei with pleomorphic variations largely retain a convex silhouette in their two-dimensional projection. This near-ubiquitous convexity means that a star-convex polygon can capture the full boundary geometry of a nucleus with a compact set of radial distances, avoiding the information loss of axis-aligned bounding boxes while remaining far more parameter-efficient than dense per-pixel segmentation masks \cite{schmidt2018cell}.
-
-\subsection{End-to-End Detection with Bipartite Matching}
-\label{sec:e2e-matching}
-
-\subsubsection{Bipartite Matching: Hungarian Algorithm}
-
-Bipartite matching establishes a one-to-one correspondence between two sets of elements by finding an optimal assignment that minimizes a total cost. In the context of object detection, bipartite matching assigns each ground-truth object to exactly one prediction and each prediction to at most one ground-truth object, eliminating the ambiguity inherent in IoU-based assignment where multiple predictions can match the same ground-truth object.
-
-The assignment is formulated as a minimum-cost bipartite matching problem. Given a set of $N$ ground-truth objects and $M$ predictions, a cost matrix $\mathbf{C} \in \mathbb{R}^{N \times M}$ is constructed where $C_{i,j}$ measures the dissimilarity between ground-truth $i$ and prediction $j$. A common choice is the negative IoU: $C_{i,j} = 1 - \text{IoU}(g_i, p_j)$. The optimal assignment is found by solving:
+Stochastic Gradient Descent (SGD) remains one of the most widely used optimization algorithms in deep learning. Given a loss function $\mathcal{L}(\theta)$ parameterized by $\theta$, SGD updates the parameters using the gradient of the loss estimated from a mini-batch of training samples:
 
 \begin{equation}
-    \begin{aligned}
-        \min_{x_{i,j}} \quad & \sum_{i=1}^{N} \sum_{j=1}^{M} C_{i,j} \, x_{i,j} \\
-        \text{s.t.} \quad & \sum_{j=1}^{M} x_{i,j} = 1, \quad \forall i \in \{1, \ldots, N\} \\
-        & \sum_{i=1}^{N} x_{i,j} \leq 1, \quad \forall j \in \{1, \ldots, M\} \\
-        & x_{i,j} \in \{0, 1\}
-    \end{aligned}
+    \theta_{t+1} = \theta_t - \eta \nabla_{\theta} \mathcal{L}(\theta_t)
 \end{equation}
 
-where $x_{i,j} = 1$ if ground-truth $i$ is assigned to prediction $j$, and $0$ otherwise. The first constraint ensures every ground-truth object receives exactly one match. The second constraint ensures no prediction is matched to more than one ground-truth object. When $M > N$, predictions not assigned to any ground-truth are treated as background.
+where $\eta$ is the learning rate. While simple, vanilla SGD can converge slowly in directions with low curvature and oscillate in directions with high curvature.
 
-The \textbf{Hungarian algorithm} (Kuhn--Munkres) solves this problem in $O(\max(N, M)^3)$ time through the following steps on a square cost matrix (padded with large values if $N \neq M$): (1) subtract the row minimum from each row, (2) subtract the column minimum from each column, (3) cover all zero entries with the minimum number of horizontal and vertical lines, (4) if the number of lines equals $N$, an optimal assignment is found by selecting independent zeros; otherwise, subtract the smallest uncovered value from all uncovered entries, add it to all doubly covered entries, and repeat from step 3.
+Momentum \cite{sutskever2013momentum} addresses this by accumulating a velocity vector that smooths the gradient trajectory:
 
-This bipartite matching formulation is the foundation of end-to-end detection frameworks such as DETR. By guaranteeing a unique assignment, it eliminates the need for NMS as a post-processing step, since each ground-truth object is matched to exactly one prediction and there are no duplicate assignments to suppress.
+\begin{equation}
+    v_{t+1} = \mu v_t + \nabla_{\theta} \mathcal{L}(\theta_t), \quad
+    \theta_{t+1} = \theta_t - \eta v_{t+1}
+\end{equation}
 
-\subsubsection{Task-Aligned Matching}
+where $\mu \in [0, 1)$ is the momentum coefficient (typically $\mu = 0.9$ or $\mu = 0.99$). The velocity term accelerates convergence in consistent gradient directions and dampens oscillations, significantly improving training stability.
+
+\subsubsubsection{Muon Optimizer}
+\label{sec:muon}
+
+The Muon optimizer \cite{chen2025muon} is a recent optimization algorithm designed for training neural networks with matrix-structured parameters. Unlike standard optimizers such as SGD or AdamW that treat each parameter independently, Muon exploits the matrix structure of weight tensors by applying momentum accumulation followed by Newton-Schulz orthogonalization to constrain the spectral norm of the weight updates.
+
+For a weight matrix $W \in \mathbb{R}^{m \times n}$ with gradient $G_t = \nabla_W \mathcal{L}(W_t)$, Muon first computes a momentum term analogous to SGD with momentum:
+
+\begin{equation}
+    M_t = \mu M_{t-1} + G_t
+\end{equation}
+
+where $\mu$ is the momentum decay rate. The momentum $M_t$ is then orthogonalized through $k$ iterations of the Newton-Schulz algorithm, which approximates the polar factor $\widetilde{M}_t = UV^\top$ where $M_t = U \Sigma V^\top$ is the singular value decomposition. Starting from $X_0 = M_t / \|M_t\|_F$, each iteration computes:
+
+\begin{equation}
+    X_{i+1} = \frac{3}{2} X_i - \frac{1}{2} X_i X_i^\top X_i
+\end{equation}
+
+After $k$ iterations (typically $k = 5$), the orthogonalized update $\widetilde{M}_t \approx X_k$ is obtained. Empirically, $k = 5$ Newton-Schulz steps suffice to achieve a near-orthogonal matrix, avoiding the $O(\min(m,n)^3)$ cost of an exact SVD. The weight is then updated as:
+
+\begin{equation}
+    W_{t+1} = W_t - \eta \cdot \widetilde{M}_t
+\end{equation}
+
+where $\eta$ is the learning rate. The Newton-Schulz iteration converges to the polar factor, which implicitly constrains the spectral norm $\|W_t\|_2$ during training. This spectral normalization has been shown to improve training stability and generalization by preventing individual weight matrices from developing disproportionately large singular values that would dominate the parameter norm \cite{chen2025muon}. Muon has demonstrated strong empirical performance in training vision and language models, achieving faster convergence than AdamW while maintaining comparable or better final accuracy.
+
+\subsubsection{Assignment}
+\label{sec:assignment}
+
+\subsubsubsection{Task-Aligned Matching}
 \label{sec:tal}
 
 Task-aligned matching is an assignment strategy used in YOLO-based detection frameworks that jointly considers classification and localization quality when matching predictions to ground-truth objects. Rather than using IoU alone, task-aligned matching defines a combined alignment metric:
@@ -431,7 +413,7 @@ Task-aligned matching is an assignment strategy used in YOLO-based detection fra
 
 where $s$ is the classification confidence score, $u$ is the predicted IoU between the prediction and the ground-truth object, and $\alpha, \beta$ are weighting hyperparameters that balance the contribution of classification and localization. A prediction is assigned to a ground-truth object only if its alignment metric $t$ exceeds a threshold, and each ground-truth object is assigned to the prediction with the highest $t$ value. This ensures that predictions assigned to an object are both well-localized (high IoU) and confidently classified, improving training stability.
 
-\subsubsection{Dual-Label Assignment}
+\subsubsubsection{Dual-Label Assignment}
 \label{sec:dual-label}
 
 Dual-label assignment, introduced in YOLO26, is a training strategy that combines one-to-many and one-to-one matching within a single architecture to achieve the benefits of both paradigms. The model employs two parallel detection heads: a \textbf{one-to-many head} that assigns multiple predictions to each ground-truth object (as in conventional YOLO training), and a \textbf{one-to-one head} that enforces a unique bipartite matching between predictions and ground-truth objects (as in DETR-style training).

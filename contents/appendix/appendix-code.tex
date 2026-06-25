@@ -1,15 +1,13 @@
 \section{Code Snippets}
 
 The following sections contain key code excerpts from the RayCastED model
-implementation.
-
-\subsection{Training Configuration}
-\begin{lstlisting}[language=XML]
-
-\end{lstlisting}
+implementation, organized by architectural component.
 
 \subsection{Architecture Configuration}
-\lstset{literate={->}{\texttt{->}}{3} {<-}{\texttt{<-}}{3}}
+
+The following YAML defines the RayCastED model backbone, neck, and detection
+head.
+
 \begin{lstlisting}[language=XML]
 nc: 5
 end2end: True
@@ -53,40 +51,403 @@ head:
 
   - [[14, 17, 20], 1, RayCastDetect, [nc, reg_max, end2end]]
 \end{lstlisting}
-\subsection{RayCast Representation Generation}
-\subsection{RayCastDetect}
-\subsection{ResoConv}
 
+\subsection{Detection Head Architecture}
 
-% --- Example: inline listing ---
-% \subsection{Model Architecture}
-% \begin{lstlisting}[language=Python, caption={RayCastED backbone definition}, label={lst:backbone}]
-% import torch
-% import torch.nn as nn
-%
-% class RayCastED(nn.Module):
-%     def __init__(self, num_classes=2):
-%         super().__init__()
-%         ...
-% \end{lstlisting}
+\subsubsection{Dual-Classification Head}
 
-% --- Example: input from file ---
-% \subsection{Training Loop}
-% \lstinputlisting[language=Python, caption={Main training loop}, label={lst:train}]{path/to/train.py}
+\begin{lstlisting}[language=Python]
+# head.py:189-219 -- RayCastDetect.__init__ excerpt
 
-% --- Example: algorithm pseudocode ---
-% \subsection{Ray Casting Algorithm}
-% \begin{algorithm}
-%     \caption{Ray casting for contour sampling}\label{alg:raycast}
-%     \begin{algorithmic}[1]
-%         \Procedure{RayCast}{$center$, $num\_rays$, $max\_dist$}
-%             \State $contour \gets [\,]$
-%             \For{$i \gets 0$ to $num\_rays - 1$}
-%                 \State $\theta \gets 2\pi i / num\_rays$
-%                 \State $point \gets$ cast ray from $center$ at angle $\theta$ up to $max\_dist$
-%                 \State append $point$ to $contour$
-%             \EndFor
-%             \State \Return $contour$
-%         \EndProcedure
-%     \end{algorithmic}
-% \end{algorithm}
+# Separate o2o box and cls heads via deepcopy.
+# Shared cls head caused 11.5x overprediction: o2m's dense positives
+# taught it to fire high scores for many anchors per GT.
+self.one2one_cv2 = copy.deepcopy(self.cv2)
+self.one2one_cv3 = copy.deepcopy(self.cv3)
+
+if hierarchical_cls:
+    # Hierarchical: binary (fg/bg) + class (cell type) heads.
+    # Binary head: ALL anchors get gradient -> strong fg/bg signal.
+    # Class head: only fg anchors -> simpler inter-class task.
+    self.one2one_cv3_binary = copy.deepcopy(self.cv3)
+    for seq in self.one2one_cv3_binary:
+        seq[-1] = nn.Conv2d(seq[-1].in_channels, 1, 1)
+    self.one2one_cv3_class = copy.deepcopy(self.cv3)
+\end{lstlisting}
+
+\subsubsection{RayCastDetect Forward Head}
+
+\begin{lstlisting}[language=Python]
+# head.py:221-258 -- RayCastDetect.forward_head
+
+poly = torch.cat([box_head[i](x[i]).view(bs, self.raycast_dim, -1)
+                  for i in range(self.nl)], dim=-1)
+
+if cls_head_binary is not None and cls_head_class is not None:
+    binary_in = [xi.detach() for xi in x] if self.hierarchical_cls_detach else x
+    binary_scores = torch.cat(
+        [cls_head_binary[i](binary_in[i]).view(bs, 1, -1)
+         for i in range(self.nl)], dim=-1)
+    class_scores = torch.cat(
+        [cls_head_class[i](x[i]).view(bs, self.nc, -1)
+         for i in range(self.nl)], dim=-1)
+    result = dict(boxes=poly, binary_scores=binary_scores,
+                  class_scores=class_scores, feats=x)
+else:
+    scores = torch.cat([cls_head[i](x[i]).view(bs, self.nc, -1)
+                        for i in range(self.nl)], dim=-1)
+    result = dict(boxes=poly, scores=scores, feats=x)
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python]
+# head.py:269-294 -- RayCastDetect.forward
+
+preds = self.forward_head(x, **self.one2many)
+if self.end2end:
+    x_detach = [xi.detach() for xi in x]
+    one2one = self.forward_head(x_detach, **self.one2one)
+    preds = {'one2many': preds, 'one2one': one2one}
+
+if self.training and self.end2end and self.inter_scale_competition and self.nl > 1:
+    one2one = preds['one2one']
+    if self.hierarchical_cls and 'binary_scores' in one2one:
+        binary_prob = one2one['binary_scores'].sigmoid()
+        adjusted = self._apply_inter_scale_competition(
+            binary_prob, one2one['feats'])
+        adjusted = adjusted.clamp(min=1e-7, max=1 - 1e-7)
+        one2one['binary_scores'] = torch.log(adjusted / (1 - adjusted))
+    else:
+        scores_prob = one2one['scores'].sigmoid()
+        adjusted = self._apply_inter_scale_competition(
+            scores_prob, one2one['feats'])
+        adjusted = adjusted.clamp(min=1e-7, max=1 - 1e-7)
+        one2one['scores'] = torch.log(adjusted / (1 - adjusted))
+    return preds
+\end{lstlisting}
+
+\subsubsection{Inter-Scale Competition}
+
+\begin{lstlisting}[language=Python]
+# head.py:296-356 -- RayCastDetect._apply_inter_scale_competition
+
+bs, nc, N_total = scores.shape
+spatial_shapes = [(f.shape[2], f.shape[3]) for f in feats]
+anchor_counts = [h * w for h, w in spatial_shapes]
+H_p2, W_p2 = spatial_shapes[0]
+
+scale_scores = scores.split(anchor_counts, dim=-1)
+
+scale_spatial = []
+for ss, (h, w) in zip(scale_scores, spatial_shapes):
+    scale_spatial.append(ss.view(bs, nc, h, w))
+
+# Upsample all scales to P2 resolution
+upsampled = []
+for si, ss in enumerate(scale_spatial):
+    if si == 0:
+        upsampled.append(ss)
+    else:
+        upsampled.append(F.interpolate(
+            ss, size=(H_p2, W_p2), mode='bilinear', align_corners=False))
+
+stacked = torch.stack(upsampled, dim=2)
+
+if self.inter_scale_temperature != 1.0:
+    stacked = stacked / self.inter_scale_temperature
+
+# Softmax competition across the scale dimension
+competition_weights = F.softmax(stacked, dim=2)
+
+# Apply per-scale suppression weights
+result_parts = []
+for si in range(len(scale_spatial)):
+    cw = competition_weights[:, :, si, :, :]
+    if si == 0:
+        adjusted = scale_spatial[si] * cw
+    else:
+        cw_down = F.interpolate(
+            cw, size=spatial_shapes[si],
+            mode='bilinear', align_corners=False)
+        adjusted = scale_spatial[si] * cw_down
+    result_parts.append(adjusted.view(bs, nc, -1))
+
+return torch.cat(result_parts, dim=-1)
+\end{lstlisting}
+
+\subsection{Task-Aligned Assignment}
+
+\subsubsection{Alignment Metric}
+
+\begin{lstlisting}[language=Python]
+# tal.py:159-230 -- RayCastAssigner.get_box_metrics
+
+na = pd_bboxes.shape[-2]
+mask_gt_bool = mask_gt.bool().expand(-1, -1, na)
+overlaps = torch.zeros([self.bs, self.n_max_boxes, na],
+                        dtype=torch.float32, device=pd_bboxes.device)
+bbox_scores = torch.zeros([self.bs, self.n_max_boxes, na],
+                           dtype=pd_scores.dtype, device=pd_scores.device)
+
+# Gather cls scores per GT class
+ind = torch.zeros([2, self.bs, self.n_max_boxes], dtype=torch.long)
+ind[0] = torch.arange(end=self.bs).view(-1, 1).expand(-1, self.n_max_boxes)
+ind[1] = gt_labels.squeeze(-1)
+bbox_scores[mask_gt_bool] = pd_scores[ind[0], :, ind[1]][mask_gt_bool]
+
+if gauss_data is not None:
+    topk_idx, _gauss = gauss_data
+    k_prefilt = topk_idx.shape[-1]
+
+    if self.use_cls_only:
+        overlaps.scatter_(2, topk_idx,
+            torch.ones(self.bs, self.n_max_boxes, k_prefilt,
+                        dtype=overlaps.dtype, device=overlaps.device))
+    else:
+        n_rays = pd_bboxes.shape[-1] - 2
+        bs_idx = torch.arange(self.bs, device=topk_idx.device)
+        bs_idx = bs_idx.view(-1, 1, 1).expand(-1, self.n_max_boxes, k_prefilt)
+        pd_block = pd_bboxes[bs_idx, topk_idx, 2:]
+        gt_rays = gt_bboxes[:, :, 2:].unsqueeze(2).expand(-1, -1, k_prefilt, -1)
+
+        iou_block = polar_iou_torch(pd_block.reshape(-1, n_rays),
+                                     gt_rays.reshape(-1, n_rays))
+        iou_block = iou_block.reshape(self.bs, self.n_max_boxes, k_prefilt)
+        overlaps.scatter_(2, topk_idx, iou_block.to(overlaps.dtype))
+
+# align = cls^alpha * PolarIoU^beta
+align_metric = bbox_scores.pow(self.alpha) * overlaps.pow(self.beta)
+return align_metric, overlaps
+\end{lstlisting}
+
+\subsubsection{Gaussian Spatial Decay and Dynamic Top-K Selection}
+
+\begin{lstlisting}[language=Python]
+# tal.py:236-274 -- RayCastAssigner.get_pos_mask
+
+gauss_data = (self._prefilter_by_distance(gt_bboxes, anc_points, mask_gt)
+              if self.radius_scale > 0 else None)
+
+align_metric, overlaps = self.get_box_metrics(
+    pd_scores, pd_bboxes, gt_labels, gt_bboxes, mask_gt, gauss_data=gauss_data)
+
+# Apply Gaussian spatial decay: exp(-d^2 / 2*sigma^2)
+# Distant anchors get ~0 naturally -- no hard containment filtering needed.
+if gauss_data is not None:
+    topk_idx, gauss = gauss_data
+    current = align_metric.gather(2, topk_idx)
+    updated = current * gauss
+    align_metric.scatter_(2, topk_idx, updated)
+
+# Dynamic per-GT top-k selection
+mask_topk = self.select_topk_candidates(
+    align_metric, topk_mask=mask_gt.expand(-1, -1, self.topk).bool())
+
+mask_pos = mask_topk * mask_gt
+
+# STAL: enforce minimum positive assignments per GT
+if self.stal_min_positives > 0:
+    pos_per_gt = mask_pos.sum(dim=-1)
+    valid_gt = mask_gt.any(dim=-1)
+    missing = (pos_per_gt < self.stal_min_positives) & valid_gt
+    if missing.any():
+        distances = torch.cdist(
+            gt_bboxes[:, :, :2].float(), anc_points.float())
+        _, nearest_idx = distances.min(dim=-1)
+        for b in range(self.bs):
+            missing_gts = missing[b].nonzero(as_tuple=True)[0]
+            for g in missing_gts:
+                mask_pos[b, g, nearest_idx[b, g]] = 1
+
+return mask_pos, align_metric, overlaps
+\end{lstlisting}
+
+\subsection{Ground-Truth Ray Computation}
+
+\subsubsection{Cramer's Rule Solver for Ray--Polygon Intersection}
+
+\begin{lstlisting}[language=Python]
+# raycast_gpu.py:200-243 -- _solve_ray_intersections
+
+cos_d, sin_d = directions
+n_polys, n_verts, _ = v_padded.shape
+poly_idx = torch.arange(n_polys, device=centroids.device)
+
+# Connect last real vertex to first (close polygon loop)
+n_real = mask.sum(dim=1).long()
+vjn = torch.empty_like(v_padded)
+vjn[:, :-1, :] = v_padded[:, 1:, :]
+vjn[poly_idx, n_real - 1] = v_padded[poly_idx, 0]
+
+last_edge = (torch.arange(n_verts, device=centroids.device).unsqueeze(0)
+             == (n_real - 1).unsqueeze(1))
+edge_mask = mask & (torch.arange(n_verts, device=centroids.device)
+                     .unsqueeze(0) < n_real.unsqueeze(1))
+edge_mask = edge_mask | last_edge
+
+v1x, v1y = v_padded[:, :, 0].unsqueeze(1), v_padded[:, :, 1].unsqueeze(1)
+v2x, v2y = vjn[:, :, 0].unsqueeze(1), vjn[:, :, 1].unsqueeze(1)
+cx = centroids[:, 0].unsqueeze(1).unsqueeze(2)
+cy = centroids[:, 1].unsqueeze(1).unsqueeze(2)
+
+dx, dy = v2x - v1x, v2y - v1y
+cos_exp, sin_exp = cos_d.view(1, -1, 1), sin_d.view(1, -1, 1)
+
+det = -cos_exp * dy + sin_exp * dx
+det_valid = det.abs() > 1e-10
+
+# Cramer's rule for ray--edge intersection
+t_num = (v1x - cx) * (-dy) + (v1y - cy) * dx
+u_num = (v1x - cx) * (-sin_exp) + (v1y - cy) * cos_exp
+
+safe_det = torch.where(det_valid, det, torch.ones_like(det))
+t = t_num / safe_det
+u = u_num / safe_det
+
+valid = det_valid & (t > 1e-6) & (u >= 0) & (u <= 1)
+valid = valid & edge_mask.unsqueeze(1)
+
+dists = torch.where(valid, t, torch.full_like(t, 1e10))
+min_dists, _ = dists.min(dim=-1)
+
+return min_dists
+\end{lstlisting}
+
+\subsection{Geometric Loss Formulation}
+
+\subsubsection{Rays Loss and Analytical GT Distances}
+
+\begin{lstlisting}[language=Python]
+# star_distances_analytical.py:152-217 -- _analytical_ray_distances_paired
+
+def _analytical_ray_distances_paired(centroids_px, vertices, ray_cos, ray_sin):
+    device = centroids_px.device
+    dtype = centroids_px.dtype
+    n_rays = ray_cos.shape[0]
+    n_pairs, n_verts, _ = vertices.shape
+
+    ray_cos = ray_cos.to(device=device, dtype=dtype).view(1, 1, n_rays)
+    ray_sin = ray_sin.to(device=device, dtype=dtype).view(1, 1, n_rays)
+
+    v1 = vertices
+    v2_shift = vertices.roll(-1, dims=1)
+
+    cx = centroids_px[:, 0:1, None]
+    cy = centroids_px[:, 1:2, None]
+
+    v1x = v1[:, :, 0:1]
+    v1y = v1[:, :, 1:2]
+    v2x = v2_shift[:, :, 0:1]
+    v2y = v2_shift[:, :, 1:2]
+
+    dx = v2x - v1x
+    dy = v2y - v1y
+
+    cos_e = ray_cos.expand(n_pairs, n_verts, n_rays)
+    sin_e = ray_sin.expand(n_pairs, n_verts, n_rays)
+
+    det = -cos_e * dy + sin_e * dx
+    det_valid = det.abs() > 1e-10
+
+    t_num = (v1x - cx) * (-dy) + (v1y - cy) * dx
+    u_num = (v1x - cx) * (-sin_e) + (v1y - cy) * cos_e
+
+    safe_det = torch.where(det_valid, det, torch.ones_like(det))
+    t = t_num / safe_det
+    u = u_num / safe_det
+
+    valid = det_valid & (t > 1e-6) & (u >= 0) & (u <= 1)
+
+    large_val = torch.full_like(t, 1e10)
+    dists = torch.where(valid, t, large_val)
+    min_dists, _ = dists.min(dim=1)
+
+    diagonal_px = torch.as_tensor(
+        (vertices.max() - vertices.min()) * 2.0,
+        device=device, dtype=dtype).clamp(min=256.0)
+    min_dists = min_dists.clamp(max=diagonal_px)
+    return min_dists
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python]
+# star_distances_analytical.py:220-244 -- analytical_gt_rays
+
+def analytical_gt_rays(pred_xy_px, gt_vertices, ray_cos, ray_sin, crop_size):
+    distances = _analytical_ray_distances_paired(
+        pred_xy_px, gt_vertices, ray_cos, ray_sin)
+    return distances / crop_size
+\end{lstlisting}
+
+\subsubsection{Polar IoU Loss}
+
+\begin{lstlisting}[language=Python]
+# loss.py:402-412 -- L_PolarIoU in get_assigned_targets_and_loss
+
+# -log(PolarIoU), clamped to bound gradient magnitude
+fg_piou = polar_iou_torch(fg_pred_rays, fg_target_rays_static)
+piou_loss = -torch.log(fg_piou.clamp(min=1e-4))
+if fg_plb is not None:
+    piou_loss = piou_loss * fg_plb
+loss[3] = piou_loss.sum() / n_fg
+\end{lstlisting}
+
+\subsubsection{1D Discrete Laplacian Smooth Loss}
+
+\begin{lstlisting}[language=Python]
+# ops/loss.py:29-56 -- curvature_smoothness_loss_torch
+
+def curvature_smoothness_loss_torch(rays):
+    """Circular 2nd-order difference (curvature) penalty.
+
+    L_curv = mean|d_{i+1} - 2*d_i + d_{i-1}|
+
+    A perfect circle has zero penalty. Smooth irregular shapes
+    (ellipses, organic nuclei) have low penalty. Only sharp kinks
+    and zigzags are penalised -- unlike 1st-order smoothness, which
+    also fights legitimate non-round GT shapes.
+
+    Circular indexing wraps at ends so every ray contributes.
+    """
+    rays_next = torch.roll(rays, shifts=-1, dims=-1)
+    rays_prev = torch.roll(rays, shifts=1, dims=-1)
+    curvature = rays_next - 2.0 * rays + rays_prev
+    return torch.mean(torch.abs(curvature), dim=-1)
+\end{lstlisting}
+
+\subsubsection{Training-Time Integration of Geometric Terms}
+
+\begin{lstlisting}[language=Python]
+# loss.py:370-423 -- Training-time analytical ray computation and
+# final three geometric loss terms
+
+ray_cos, ray_sin = build_ray_directions(
+    self.n_rays, device=self.device, dtype=torch.float32)
+gt_vertices = _normed_rays_to_vertices(
+    gt_centroids_px, gt_rays_norm, crop_size_val, ray_cos, ray_sin)
+gt_vertices = gt_vertices.reshape(*gt_bboxes.shape[:2], self.n_rays, 2)
+
+fg_indices = fg_mask.float().nonzero(as_tuple=False)
+fg_batch_idx = fg_indices[:, 0]
+fg_gt_idx = target_gt_idx[fg_indices[:, 0], fg_indices[:, 1]]
+matched_gt_vertices = gt_vertices[fg_batch_idx, fg_gt_idx]
+
+# Recompute GT rays from predicted centroid to GT polygon boundary
+analytical_target_rays = analytical_gt_rays(
+    fg_pred_xy_px.detach(), matched_gt_vertices,
+    ray_cos, ray_sin, crop_size_val)
+fg_target_rays = analytical_target_rays.to(dtype=fg_target_rays.dtype)
+
+# L_L1: Uniform MAE on ray distances
+if self.log_ray_loss:
+    loss_l1 = _log_space_ray_loss(fg_pred_rays, fg_target_rays)
+else:
+    loss_l1 = (fg_pred_rays - fg_target_rays).abs().mean(-1)
+loss[2] = loss_l1.sum() / n_fg
+
+# L_PolarIoU: -log(PolarIoU) -- uses static GT for polygon overlap
+fg_piou = polar_iou_torch(fg_pred_rays, fg_target_rays_static)
+loss[3] = (-torch.log(fg_piou.clamp(min=1e-4))).sum() / n_fg
+
+# L_smooth: Circular 2nd-order curvature regularisation
+smooth_loss = curvature_smoothness_loss_torch(fg_pred_rays)
+loss[4] = smooth_loss.sum() / n_fg
+\end{lstlisting}

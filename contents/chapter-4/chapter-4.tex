@@ -94,18 +94,20 @@ RayCastED-B generalizes well to PUMA, achieving performance comparable to the in
 \section{Edge Deployment Evaluation}
 \label{sec:edge-deployment}
 
+To assess the practicality of RayCastED on resource-constrained hardware, the base variant is tested on two platforms: a desktop GPU (RTX 5070 Ti) and an edge computing device (Jetson Orin Nano). Table~\ref{tab:edge} compares accuracy and throughput across six configurations.
+
+\input{contents/chapter-4/tab/edge}
+
+The PyTorch baseline on the RTX 5070 Ti achieves near-exact predicted nuclei counts, confirming that the end-to-end inference pipeline operates correctly. When compiled with TensorRT, the RTX 5070 Ti reaches a per-image latency of 2.70~ms, representing a substantial speedup over PyTorch. Unexpectedly, TensorRT deployment on the Jetson Orin Nano yields consistently higher bPQ and mPQ than the desktop GPU across both FP16 and FP32 configurations. This is unlikely to stem from reduced precision, since FP32 and FP16 produce near-identical metrics. A plausible explanation is that TensorRT's aggressive graph-level optimizations for the Jetson target architecture restructure the operator execution order in a way that benefits the model numerically. The absence of such gains on the older RTX 2080 Super (similarly running TensorRT) supports the hypothesis that the effect is architecture-specific rather than a universal property of engine compilation.
+
+A qualitative visual check is conducted to compare the output across configurations. Figure~\ref{fig:visual-edge} shows that the predicted nuclear boundaries are visually similar across the desktop PyTorch, desktop TensorRT, and Jetson TensorRT configurations, confirming that the edge deployment preserves detection fidelity despite the substantial differences in hardware and inference backends.
+
 \begin{figure}[H]
 	\centering
 	\includegraphics[width=\textwidth]{contents/chapter-4/fig/visual-edge.pdf}
 	\caption{Comparison of edge deployment output across platforms.}
 	\label{fig:visual-edge}
 \end{figure}
-
-To assess the practicality of RayCastED for clinical deployment on resource-constrained hardware, the smallest variant is benchmarked on two platforms: a desktop GPU (RTX 5070 Ti) and an embedded AI accelerator (Jetson Orin Nano). Table~\ref{tab:edge} compares accuracy and throughput across five configurations.
-
-\input{contents/chapter-4/tab/edge}
-
-The PyTorch baseline on the RTX 5070 Ti achieves near-exact predicted nuclei counts, confirming that the end-to-end inference pipeline operates correctly. When compiled with TensorRT, the RTX 5070 Ti reaches a per-image latency of 2.70~ms, representing a substantial speedup over PyTorch. Unexpectedly, TensorRT deployment on the Jetson Orin Nano yields consistently higher bPQ and mPQ than the desktop GPU across both FP16 and TF32 configurations. This is unlikely to stem from reduced precision, since TF32 and FP16 produce near-identical metrics. A plausible explanation is that TensorRT's aggressive graph-level optimizations for the Jetson target architecture restructure the operator execution order in a way that benefits the model numerically. The absence of such gains on the older RTX 2080 Super (similarly running TensorRT) supports the hypothesis that the effect is architecture-specific rather than a universal property of engine compilation.
 
 \section{Ablation Study}
 \label{sec:ablation}
